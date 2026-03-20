@@ -1,0 +1,23 @@
+{
+  "name": "madnh-task-skill",
+  "owner": {
+    "name": "madnh"
+  },
+  "metadata": {
+    "description": "Task management skill for Claude Code",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "task",
+      "source": "./plugins/task",
+      "description": "CLI tool for managing implementation tasks with autonomous execution loop",
+      "version": "1.0.0",
+      "author": {
+        "name": "madnh"
+      },
+      "category": "development",
+      "tags": ["task", "project-management", "automation"]
+    }
+  ]
+}

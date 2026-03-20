@@ -1,0 +1,77 @@
+project:
+  name: "TSK"
+
+ralph:
+  max_iterations: 10
+  cooldown: 60
+  retry_max: 10
+  retry_wait: 600
+  claude:
+    command: "claude"
+    args: ["-p", "--dangerously-skip-permissions"]
+  prompt:
+    all: |
+      # Custom instructions appended to ALL loop steps (analyze, implement, review)
+      # Examples:
+      #   - Always write code comments in English
+      #   - Use conventional commits: feat(TASK-XXX): description
+      #   - Prefer table-driven tests in Go
+    analyze: |
+      # Custom instructions for the ANALYZE step
+      # Appended when the loop checks phase status to decide next action
+      # Examples:
+      #   - Skip tasks with feature "admin-ui" for now
+      #   - Prioritize backend tasks over frontend
+    implement: |
+      Integration testing is required beyond unit tests. Verify your work actually runs end-to-end:
+
+      Database tasks:
+      - After migrations, verify schema: query sqlite_master or information_schema to confirm tables/columns exist
+      - Insert and query test data to verify constraints and types
+
+      Backend API tasks:
+      - Start the server in background: `go run ./cmd/server &` (or the project's entry point)
+      - Use `curl` to smoke-test each new/modified endpoint
+      - Verify response status codes, JSON structure, and data correctness
+      - Test error cases (404, 400, 401) not just happy paths
+      - Kill the server after testing
+
+      Frontend tasks:
+      - Build the frontend to catch compile errors
+      - If the task adds pages/routes, start the dev server and use the /agent-browser skill to:
+        - Navigate to the new page
+        - Verify it renders without errors
+        - Test basic interactions (click buttons, fill forms, submit)
+        - Check browser console for JS errors
+
+      Full-stack verification:
+      - When a task touches both frontend and backend, verify the full chain:
+        frontend → API call → backend handler → database → response → UI update
+    review: |
+      Beyond lint and unit tests, verify integration actually works:
+
+      Database tasks:
+      - Confirm schema exists by querying the database directly
+
+      Backend API tasks:
+      - Start the server, call each new/modified endpoint with curl
+      - Verify correct status codes and response bodies
+      - If endpoints don't respond correctly, mark REVISE with specific failures
+
+      Frontend tasks:
+      - Use /agent-browser to open the page in a real browser
+      - Verify page renders, no console errors, basic interactions work
+      - If UI is broken or non-functional, mark REVISE
+
+      Do NOT mark SHIP if only unit tests pass but no integration verification was done.
+      The level of integration testing should match the task scope:
+      - Engine-only task: unit tests are sufficient
+      - API task: must curl the endpoints
+      - UI task: must verify in browser
+
+
+task:
+  default_priority: "medium"
+
+doctor:
+  required_tools: ["git", "claude"]

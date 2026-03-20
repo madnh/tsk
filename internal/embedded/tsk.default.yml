@@ -1,0 +1,45 @@
+project:
+  name: "My Project"
+
+ralph:
+  max_iterations: 10
+  cooldown: 60
+  retry_max: 10
+  retry_wait: 600
+  claude:
+    command: "claude"
+    args: ["-p", "--dangerously-skip-permissions"]
+  prompt:
+    all: |
+      # Custom instructions appended to ALL loop steps (analyze, implement, review)
+      # Examples:
+      #   - Always write code comments in English
+      #   - Use conventional commits: feat(TASK-XXX): description
+      #   - Prefer table-driven tests in Go
+    analyze: |
+      # Custom instructions for the ANALYZE step
+      # Appended when the loop checks phase status to decide next action
+      # Examples:
+      #   - Skip tasks with feature "admin-ui" for now
+      #   - Prioritize backend tasks over frontend
+    implement: |
+      # Custom instructions for the IMPLEMENT step
+      # Appended when the loop implements a task
+      # Examples:
+      #   - Follow existing code patterns in the codebase
+      #   - Always add table-driven tests
+      #   - Use context.Context for all public functions
+      #   - Run go test with -race flag
+    review: |
+      # Custom instructions for the REVIEW step
+      # Appended when the loop reviews implementation against acceptance criteria
+      # Examples:
+      #   - Check for proper error wrapping with fmt.Errorf
+      #   - Verify no TODO comments left in code
+      #   - Ensure all public functions have doc comments
+
+task:
+  default_priority: "medium"
+
+doctor:
+  required_tools: ["git", "claude"]

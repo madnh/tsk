@@ -1,0 +1,30 @@
+# Binary
+tsk
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Tasks runtime state
+tasks/loop/state.json
+tasks/loop/step-result.txt
+tasks/loop/feedback.md
+tasks/loop/work-summary.md
+tasks/loop/human-input.md
+tasks/loop/history.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

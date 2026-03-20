@@ -1,0 +1,9 @@
+{
+  "name": "task",
+  "description": "CLI tool for managing implementation tasks with autonomous execution loop",
+  "version": "1.0.0",
+  "author": {
+    "name": "Farmi Engineering"
+  },
+  "license": "MIT"
+}
