@@ -263,3 +263,70 @@ your-project/
     ├── phases/         # phase-1.md, phase-2.md, ...
     └── loop/           # state.json, history.log, ...
 ```
+
+## Development
+
+### Prerequisites
+
+- Go 1.22+
+
+### Source layout
+
+```
+tsk/
+├── main.go
+├── go.mod
+├── cmd/                    # CLI commands (cobra)
+│   ├── root.go             # Root command, global flags (-o, --root-dir)
+│   ├── init.go             # tsk init
+│   ├── create.go           # tsk create
+│   ├── list.go             # tsk list
+│   ├── show.go             # tsk show
+│   ├── board.go            # tsk board
+│   ├── phase.go            # tsk phase + subcommands (log, update-body)
+│   ├── loop.go             # tsk loop + subcommands (init, status, prompt, advance, log, reset)
+│   ├── ralph.go            # tsk ralph (autonomous orchestrator)
+│   ├── doctor.go           # tsk doctor
+│   └── ...                 # start, done, approve, reject, log, files, edit, delete, next, progress, deps
+├── internal/
+│   ├── config/config.go    # tsk.yml loading + root detection
+│   ├── model/              # Task, Phase, LoopState structs
+│   ├── store/              # File CRUD (frontmatter parser, task/phase/loop stores)
+│   ├── engine/             # Business logic (dependencies, blocking, state machine)
+│   ├── prompt/prompt.go    # Generate analyze/implement/review prompts
+│   ├── output/             # JSON/pretty output formatting
+│   └── embedded/           # go:embed default tsk.yml
+└── .goreleaser.yml
+```
+
+### Build & run
+
+```bash
+go build -o tsk .
+./tsk --help
+```
+
+### Run checks
+
+```bash
+go vet ./...
+```
+
+### Release
+
+Releases are automated via GitHub Actions + [GoReleaser](https://goreleaser.com/). Tag a version to trigger:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+This builds binaries for linux/darwin/windows (amd64 + arm64) and publishes them to [GitHub Releases](https://github.com/madnh/tsk/releases).
+
+### Key design decisions
+
+- **Frontmatter parser**: Custom line-by-line parser (not `yaml.v3`) to match the original Node.js format exactly. Arrays as `[item1, item2]` on a single line.
+- **Prompts in config**: Custom prompts live in `tsk.yml` under `ralph.prompt.<step>`, not separate files. Lines starting with `#` are stripped.
+- **Root detection**: 5-level priority chain (flag → env → tsk.yml walk-up → git → cwd) so `tsk` works from any subdirectory.
+- **Ralph in Go**: Replaces the bash orchestrator. Uses goroutines for progress monitor, `exec.CommandContext` for claude invocation, context-based cancellation for clean shutdown.
+- **No test framework**: Standard library only. `go vet` for static checks.
