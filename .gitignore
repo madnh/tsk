@@ -28,3 +28,4 @@ tasks/loop/history.log
 # OS
 .DS_Store
 Thumbs.db
+old/
