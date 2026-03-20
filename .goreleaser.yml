@@ -15,11 +15,13 @@ builds:
       - -s -w
 
 archives:
-  - format: tar.gz
-    name_template: "tsk_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
+  - name_template: "tsk_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
 
 checksum:
   name_template: "checksums.txt"
