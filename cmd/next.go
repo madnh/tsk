@@ -26,7 +26,7 @@ var nextCmd = &cobra.Command{
 					"message": "No available tasks",
 				},
 				Pretty: func() {
-					fmt.Println("\n  No available tasks.\n")
+					fmt.Print("\n  No available tasks.\n\n")
 				},
 			})
 			return

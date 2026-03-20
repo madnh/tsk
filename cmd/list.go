@@ -74,7 +74,7 @@ var listCmd = &cobra.Command{
 			},
 			Pretty: func() {
 				if len(tasks) == 0 {
-					fmt.Println("\n  No tasks found.\n")
+					fmt.Print("\n  No tasks found.\n\n")
 					return
 				}
 				fmt.Printf("\n  %s%d task(s)%s\n\n", output.Bold, len(tasks), output.Reset)
