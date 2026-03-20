@@ -6,10 +6,31 @@ Single binary, no runtime dependencies. Download and run from anywhere.
 
 ## Install
 
+### Download binary (recommended)
+
+Download the latest release from [GitHub Releases](https://github.com/madnh/tsk/releases):
+
+```bash
+# Linux (amd64)
+curl -Lo tsk https://github.com/madnh/tsk/releases/latest/download/tsk_$(curl -s https://api.github.com/repos/madnh/tsk/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')_linux_amd64.tar.gz
+tar xzf tsk_*.tar.gz
+chmod +x tsk
+sudo mv tsk /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -Lo tsk.tar.gz https://github.com/madnh/tsk/releases/latest/download/tsk_$(curl -s https://api.github.com/repos/madnh/tsk/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')_darwin_arm64.tar.gz
+tar xzf tsk.tar.gz
+chmod +x tsk
+sudo mv tsk /usr/local/bin/
+```
+
+Or manually: go to [Releases](https://github.com/madnh/tsk/releases), download the archive for your OS/arch, extract, and put `tsk` in your PATH.
+
+### Build from source
+
 ```bash
 go build -o tsk .
-# Move to PATH
-mv tsk /usr/local/bin/
+sudo mv tsk /usr/local/bin/
 ```
 
 ## Quick Start
