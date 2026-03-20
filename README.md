@@ -4,7 +4,17 @@ Task management CLI for structured project execution with an autonomous AI loop.
 
 Single binary, no runtime dependencies. Download and run from anywhere.
 
-## Install
+## Install as Claude Code Skill
+
+Add `tsk` as a [Claude Code skill](https://github.com/madnh/tsk-skill) so Claude can manage tasks directly:
+
+```bash
+claude mcp add-json tsk-skill '{"type":"url","url":"https://raw.githubusercontent.com/madnh/tsk-skill/refs/heads/main/.claude-plugin/marketplace.json"}'
+```
+
+This gives Claude access to all `tsk` commands — create tasks, track progress, run the autonomous loop, etc.
+
+## Install CLI
 
 ### Download binary (recommended)
 
