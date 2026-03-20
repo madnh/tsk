@@ -1,7 +1,8 @@
 # Binary
 tsk
 
-# Go
+# Go / GoReleaser
+dist/
 *.exe
 *.exe~
 *.dll
