@@ -6,13 +6,14 @@ Single binary, no runtime dependencies. Download and run from anywhere.
 
 ## Install as Claude Code Skill
 
-Add `tsk` as a [Claude Code skill](https://github.com/madnh/tsk-skill) so Claude can manage tasks directly:
+Use `tsk` as a [Claude Code skill](https://github.com/madnh/tsk-skill) so Claude can manage tasks directly:
 
-```bash
-claude mcp add-json tsk-skill '{"type":"url","url":"https://raw.githubusercontent.com/madnh/tsk-skill/refs/heads/main/.claude-plugin/marketplace.json"}'
+```
+/plugin marketplace add madnh/tsk-skill
+/plugin install tsk@madnh-tsk-skill
 ```
 
-This gives Claude access to all `tsk` commands — create tasks, track progress, run the autonomous loop, etc.
+Claude will auto-invoke when you say "task", "next task", "what to do", "progress", "board".
 
 ## Install CLI
 
