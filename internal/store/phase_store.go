@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/user/tsk/internal/model"
+	"github.com/madnh/tsk/internal/model"
 )
 
 // PhaseStore handles phase file CRUD

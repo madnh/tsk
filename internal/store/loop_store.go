@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/user/tsk/internal/model"
+	"github.com/madnh/tsk/internal/model"
 )
 
 // LoopStore handles loop state file operations

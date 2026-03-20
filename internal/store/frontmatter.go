@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/user/tsk/internal/model"
+	"github.com/madnh/tsk/internal/model"
 )
 
 // ParseFrontmatter parses YAML frontmatter from markdown content.

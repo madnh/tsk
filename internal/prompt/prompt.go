@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/spf13/viper"
-	"github.com/user/tsk/internal/model"
-	"github.com/user/tsk/internal/store"
+	"github.com/madnh/tsk/internal/model"
+	"github.com/madnh/tsk/internal/store"
 )
 
 // Generator creates prompts for loop steps

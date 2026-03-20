@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/user/tsk/internal/output"
+	"github.com/madnh/tsk/internal/output"
 )
 
 var approveCmd = &cobra.Command{

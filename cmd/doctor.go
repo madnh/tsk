@@ -6,7 +6,7 @@ import (
 	"os/exec"
 
 	"github.com/spf13/cobra"
-	"github.com/user/tsk/internal/output"
+	"github.com/madnh/tsk/internal/output"
 )
 
 var doctorCmd = &cobra.Command{

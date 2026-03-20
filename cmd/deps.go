@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/user/tsk/internal/engine"
-	"github.com/user/tsk/internal/model"
-	"github.com/user/tsk/internal/output"
+	"github.com/madnh/tsk/internal/engine"
+	"github.com/madnh/tsk/internal/model"
+	"github.com/madnh/tsk/internal/output"
 )
 
 var depsCmd = &cobra.Command{

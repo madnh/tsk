@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/user/tsk/internal/model"
+	"github.com/madnh/tsk/internal/model"
 )
 
 // TaskStore handles task file CRUD operations

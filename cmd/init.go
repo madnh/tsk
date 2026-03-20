@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/user/tsk/internal/config"
-	"github.com/user/tsk/internal/embedded"
-	"github.com/user/tsk/internal/output"
+	"github.com/madnh/tsk/internal/config"
+	"github.com/madnh/tsk/internal/embedded"
+	"github.com/madnh/tsk/internal/output"
 )
 
 var initForce bool

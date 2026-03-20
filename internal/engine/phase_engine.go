@@ -1,6 +1,6 @@
 package engine
 
-import "github.com/user/tsk/internal/model"
+import "github.com/madnh/tsk/internal/model"
 
 // RunnablePhaseStatuses are phase statuses eligible for Ralph
 var RunnablePhaseStatuses = map[string]bool{

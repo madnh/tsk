@@ -5,9 +5,9 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/user/tsk/internal/config"
-	"github.com/user/tsk/internal/output"
-	"github.com/user/tsk/internal/store"
+	"github.com/madnh/tsk/internal/config"
+	"github.com/madnh/tsk/internal/output"
+	"github.com/madnh/tsk/internal/store"
 )
 
 var (

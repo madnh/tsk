@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/user/tsk/internal/model"
-	"github.com/user/tsk/internal/store"
+	"github.com/madnh/tsk/internal/model"
+	"github.com/madnh/tsk/internal/store"
 )
 
 // LoopEngine handles loop state machine transitions

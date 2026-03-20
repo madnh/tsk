@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"github.com/user/tsk/internal/model"
+	"github.com/madnh/tsk/internal/model"
 )
 
 // IsBlocked checks if a task is blocked by unfinished dependencies
