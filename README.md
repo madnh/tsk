@@ -147,7 +147,11 @@ Phase statuses: `pending` → `defining` → `ready` → `in_progress` → `done
 
 ### Autonomous Loop (Ralph)
 
-Ralph cycles through **analyze → implement → review** to complete tasks automatically. Each step spawns a fresh `claude -p` session. State persists through files only.
+Ralph orchestrates task completion automatically. It can run in two modes:
+
+#### Sequential Mode (Classic)
+
+Single-task linear execution with fixed steps (analyze → implement → review):
 
 ```bash
 # Run the full loop
@@ -161,6 +165,29 @@ tsk loop advance      # advance state machine
 tsk loop log          # view history
 tsk loop reset        # clear state
 ```
+
+#### Parallel Mode (New)
+
+Multiple tasks execute **simultaneously** on isolated git branches, each following a **per-type workflow**:
+
+```bash
+# Run supervisor for parallel execution
+tsk ralph --phase 1                    # Unlimited concurrent workers
+tsk ralph --phase 1 --max-workers 3    # Limit to 3 concurrent workers
+
+# Monitor progress
+tsk ralph status                       # Check supervisor status
+tsk worker status                      # List all workers
+tsk worker logs --task TASK-001        # View specific worker logs
+```
+
+**Key Features:**
+- **True Parallelism**: All eligible tasks run simultaneously (up to limit)
+- **Per-Type Workflows**: Each task type defines its own step sequence (feature, bug, docs, refactor, etc.)
+- **Git Worktree Isolation**: Each task executes on its own branch with automatic cleanup
+- **Fault Tolerance**: Failed workers don't block others; independent recovery
+
+**See [docs/PARALLEL_RALPH.md](docs/PARALLEL_RALPH.md) for detailed documentation, configuration, and examples.**
 
 #### State Machine
 
