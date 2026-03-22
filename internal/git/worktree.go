@@ -98,3 +98,17 @@ func HasConflicts(worktreePath string) bool {
 	conflicts := strings.TrimSpace(string(out))
 	return conflicts != ""
 }
+
+// HasRemote checks if the repository has a remote configured
+func HasRemote(repoRoot string) bool {
+	cmd := exec.Command("git", "remote")
+	cmd.Dir = repoRoot
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return false
+	}
+
+	remotes := strings.TrimSpace(string(out))
+	return remotes != ""
+}

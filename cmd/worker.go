@@ -373,11 +373,15 @@ func runWorker(ctx context.Context, taskID string, cfg *config.Config) {
 
 		// Auto push if configured
 		if config.GetAutoPush() {
-			pushOut, pushErr := exec.Command("git", "push").CombinedOutput()
-			if pushErr != nil {
-				workerStore.Log(fmt.Sprintf("PUSH_FAILED: %s", strings.TrimSpace(string(pushOut))))
+			if !git.HasRemote(cfg.Root) {
+				workerStore.Log("PUSH_SKIPPED: No remote configured")
 			} else {
-				workerStore.Log("PUSH_OK")
+				pushOut, pushErr := exec.Command("git", "push").CombinedOutput()
+				if pushErr != nil {
+					workerStore.Log(fmt.Sprintf("PUSH_FAILED: %s", strings.TrimSpace(string(pushOut))))
+				} else {
+					workerStore.Log("PUSH_OK")
+				}
 			}
 		}
 
