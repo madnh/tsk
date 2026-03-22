@@ -145,6 +145,12 @@ func runSupervisor(ctx context.Context, supervisorStore *store.SupervisorStore) 
 				if wState != nil {
 					if wState.Status == "done" {
 						fmt.Printf("  ✓ %s complete\n", taskID)
+						// Update task status in main task file
+						task, err := taskStore.Read(taskID)
+						if err == nil && task != nil {
+							task.Status = "done"
+							taskStore.Write(task)
+						}
 					} else {
 						fmt.Printf("  ⚠ %s exited with status: %s\n", taskID, wState.Status)
 					}
