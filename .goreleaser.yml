@@ -16,12 +16,9 @@ builds:
 
 archives:
   - name_template: "tsk_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    formats:
-      - tar.gz
-    overrides:
+    format_overrides:
       - goos: windows
-        formats:
-          - zip
+        format: zip
 
 checksum:
   name_template: "checksums.txt"
