@@ -130,10 +130,12 @@ func runSupervisor(ctx context.Context, supervisorStore *store.SupervisorStore) 
 		superState, err := supervisorStore.ReadState()
 		if err != nil {
 			fmt.Printf("Error reading supervisor state: %v\n", err)
+			supervisorStore.Log(fmt.Sprintf("ERROR reading state: %v", err))
 			return
 		}
 
 		if superState.Status != "running" {
+			supervisorStore.Log(fmt.Sprintf("Phase complete, exiting (status=%s)", superState.Status))
 			return
 		}
 
@@ -208,6 +210,7 @@ func runSupervisor(ctx context.Context, supervisorStore *store.SupervisorStore) 
 			}
 		}
 
+		supervisorStore.Log(fmt.Sprintf("POLL active_workers=%d", len(activeWorkers)))
 		select {
 		case <-time.After(pollInterval):
 		case <-ctx.Done():
@@ -225,6 +228,9 @@ func spawnWorker(ctx context.Context, taskID string) *exec.Cmd {
 		fmt.Printf("Error spawning worker for %s: %v\n", taskID, err)
 		return nil
 	}
+
+	// Wait in background so ProcessState gets populated on exit
+	go proc.Wait()
 
 	return proc
 }
