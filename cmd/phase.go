@@ -414,13 +414,13 @@ var phaseSyncCmd = &cobra.Command{
 }
 
 func init() {
-	phaseCmd.Flags().String("status", "", "Update phase status")
+	phaseCmd.Flags().String("status", "", "Update phase status (pending|defining|ready|in_progress|done)")
 	phaseCmd.Flags().String("name", "", "Update phase name")
 	phaseCmd.Flags().String("description", "", "Update phase description")
 
 	phaseCreateCmd.Flags().String("name", "", "Phase name (required)")
 	phaseCreateCmd.Flags().String("description", "", "Phase description")
-	phaseCreateCmd.Flags().String("status", "defining", "Phase status (default: defining)")
+	phaseCreateCmd.Flags().String("status", "defining", "Phase status: pending|defining|ready|in_progress|done (default: defining)")
 
 	phaseLogCmd.Flags().String("message", "", "Log message")
 	phaseLogCmd.Flags().Bool("stdin", false, "Read message from stdin")

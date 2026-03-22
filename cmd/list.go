@@ -149,9 +149,9 @@ func orDash(s string) string {
 
 func init() {
 	listCmd.Flags().String("phase", "", "Filter by phase")
-	listCmd.Flags().String("status", "", "Filter by status")
+	listCmd.Flags().String("status", "", "Filter by status (pending|in_progress|review|done)")
 	listCmd.Flags().String("feature", "", "Filter by feature")
-	listCmd.Flags().String("type", "", "Filter by type")
+	listCmd.Flags().String("type", "", "Filter by type (feature|bug|docs|refactor|test|chore)")
 	listCmd.Flags().Bool("available", false, "Show only available (pending, not blocked) tasks")
 	rootCmd.AddCommand(listCmd)
 }

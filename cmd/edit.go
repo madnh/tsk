@@ -90,7 +90,7 @@ func init() {
 	editCmd.Flags().String("title", "", "New title")
 	editCmd.Flags().String("phase", "", "New phase")
 	editCmd.Flags().String("feature", "", "New feature")
-	editCmd.Flags().String("priority", "", "New priority")
+	editCmd.Flags().String("priority", "", "New priority (critical|high|medium|low)")
 	editCmd.Flags().String("type", "", "New type (feature|bug|docs|refactor|test|chore)")
 	editCmd.Flags().String("depends", "", "New dependencies (comma-separated)")
 	editCmd.Flags().String("spec", "", "New spec path")
