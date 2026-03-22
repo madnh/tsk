@@ -42,7 +42,7 @@
    - Begins polling for pending tasks
 
 2. **Worker Spawning**
-   - For each eligible pending task: `tsk worker run --task TASK-XXX`
+   - For each eligible pending task: `tsk ralph worker run --task TASK-XXX`
    - New subprocess per task
    - Respects `max_workers` limit (queues excess tasks)
 
@@ -212,10 +212,10 @@ worktrees/                             # Created during execution
 
 ```bash
 # Run supervisor for a phase
-tsk ralph --phase 1
+tsk ralph run --phase 1
 
 # Run with worker limit (instead of unlimited)
-tsk ralph --phase 1 --max-workers 3
+tsk ralph run --phase 1 --max-workers 3
 
 # Check supervisor status
 tsk ralph status
@@ -227,22 +227,22 @@ These are typically invoked by the supervisor, but can be used manually:
 
 ```bash
 # Start a worker (normally spawned by supervisor)
-tsk worker run --task TASK-001
+tsk ralph worker run --task TASK-001
 
 # Show all worker statuses
-tsk worker status
+tsk ralph worker status
 
 # Show status of specific worker
-tsk worker status --task TASK-001
+tsk ralph worker status --task TASK-001
 
 # View worker logs
-tsk worker logs --task TASK-001
+tsk ralph worker logs --task TASK-001
 
 # Resume a blocked worker (after providing human-input.md)
-tsk worker resume --task TASK-001
+tsk ralph worker resume --task TASK-001
 
 # Kill a worker gracefully (SIGTERM)
-tsk worker kill --task TASK-001
+tsk ralph worker kill --task TASK-001
 ```
 
 ## Usage Examples
@@ -252,7 +252,7 @@ tsk worker kill --task TASK-001
 Run 5 tasks simultaneously with unlimited workers:
 
 ```bash
-$ tsk ralph --phase 1
+$ tsk ralph run --phase 1
 Supervisor starting...
 [TASK-001] Worker spawned (PID 12345)
 [TASK-002] Worker spawned (PID 12346)
@@ -261,7 +261,7 @@ Supervisor starting...
 [TASK-005] Worker spawned (PID 12349)
 
 # In another terminal
-$ watch tsk worker status
+$ watch tsk ralph worker status
 ```
 
 Expected timeline:
@@ -276,7 +276,7 @@ Expected timeline:
 Run 5 tasks with only 2 concurrent workers:
 
 ```bash
-$ tsk ralph --phase 1 --max-workers 2
+$ tsk ralph run --phase 1 --max-workers 2
 Supervisor starting...
 [TASK-001] Worker spawned (PID 12345)
 [TASK-002] Worker spawned (PID 12346)
@@ -285,7 +285,7 @@ Supervisor starting...
 [TASK-005] Queued
 
 # Monitor progress
-$ watch tsk worker status
+$ watch tsk ralph worker status
 ```
 
 Timeline:
@@ -323,16 +323,16 @@ T=60s:   All done (same parallel timeline, but different internal steps)
 
 ```bash
 # Terminal 1: Run supervisor
-$ tsk ralph --phase 1
+$ tsk ralph run --phase 1
 
 # Terminal 2: Monitor progress
-$ watch tsk worker status
+$ watch tsk ralph worker status
 
 # Terminal 3: Check supervisor
 $ tsk ralph status
 
 # Terminal 4: View specific worker logs
-$ tsk worker logs --task TASK-001
+$ tsk ralph worker logs --task TASK-001
 ```
 
 ## Performance Comparison
@@ -409,7 +409,7 @@ cat tasks/workers/TASK-001/feedback.md
 echo "Here's how to proceed..." > tasks/workers/TASK-001/human-input.md
 
 # Resume
-tsk worker resume --task TASK-001
+tsk ralph worker resume --task TASK-001
 ```
 
 ### Check Logs
@@ -419,7 +419,7 @@ tsk worker resume --task TASK-001
 tail -100 tasks/loop/supervisor.log
 
 # Specific worker log
-tsk worker logs --task TASK-001 | tail -50
+tsk ralph worker logs --task TASK-001 | tail -50
 
 # Git activity in worktree
 cd worktrees/TASK-001 && git log --oneline -10
@@ -443,14 +443,14 @@ git add .
 git rebase --continue
 
 # Resume worker
-tsk worker resume --task TASK-001
+tsk ralph worker resume --task TASK-001
 ```
 
 ### Kill a Stuck Worker
 
 Graceful termination:
 ```bash
-tsk worker kill --task TASK-002
+tsk ralph worker kill --task TASK-002
 ```
 
 This sends SIGTERM and waits for cleanup. The task state remains in `tasks/workers/TASK-002/` for inspection.
@@ -535,7 +535,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          ./tsk ralph --phase 1
+          ./tsk ralph run --phase 1
 
       - name: Push changes
         if: success()

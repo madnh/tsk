@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -20,7 +19,13 @@ import (
 
 var ralphCmd = &cobra.Command{
 	Use:   "ralph",
-	Short: "Run the autonomous execution supervisor",
+	Short: "Autonomous task execution supervisor",
+	Long:  "Manage parallel task execution with per-type workflows",
+}
+
+var ralphRunCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Start the supervisor for a phase",
 	Run: func(cmd *cobra.Command, args []string) {
 		phaseFlag, _ := cmd.Flags().GetString("phase")
 		taskFlag, _ := cmd.Flags().GetString("task")
@@ -206,7 +211,7 @@ func runSupervisor(ctx context.Context, supervisorStore *store.SupervisorStore) 
 }
 
 func spawnWorker(ctx context.Context, taskID string) *exec.Cmd {
-	proc := exec.CommandContext(ctx, os.Args[0], "worker", "run", "--task", taskID, "--root-dir", cfg.Root)
+	proc := exec.CommandContext(ctx, os.Args[0], "ralph", "worker", "run", "--task", taskID, "--root-dir", cfg.Root)
 	proc.Stdout = nil
 	proc.Stderr = nil
 
@@ -253,8 +258,14 @@ var ralphStatusCmd = &cobra.Command{
 }
 
 func init() {
-	ralphCmd.Flags().String("phase", "", "Phase to run")
-	ralphCmd.Flags().String("task", "", "Single task (legacy)")
+	// Flags for ralph run subcommand
+	ralphRunCmd.Flags().String("phase", "", "Phase to run")
+	ralphRunCmd.Flags().String("task", "", "Single task (legacy)")
+
+	// Add subcommands to ralph
+	ralphCmd.AddCommand(ralphRunCmd)
 	ralphCmd.AddCommand(ralphStatusCmd)
+	ralphCmd.AddCommand(workerCmd)
+
 	rootCmd.AddCommand(ralphCmd)
 }

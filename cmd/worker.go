@@ -482,5 +482,5 @@ func init() {
 	workerKillCmd.Flags().String("task", "", "Task ID to kill")
 	workerLogsCmd.Flags().String("task", "", "Task ID to view logs for")
 
-	rootCmd.AddCommand(workerCmd)
+	// Note: workerCmd is now added to ralphCmd in ralph.go, not rootCmd
 }

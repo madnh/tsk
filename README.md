@@ -183,13 +183,13 @@ Multiple tasks execute **simultaneously** on isolated git branches, each followi
 
 ```bash
 # Run supervisor for parallel execution
-tsk ralph --phase 1                    # Unlimited concurrent workers
-tsk ralph --phase 1 --max-workers 3    # Limit to 3 concurrent workers
+tsk ralph run --phase 1                    # Unlimited concurrent workers
+tsk ralph run --phase 1 --max-workers 3    # Limit to 3 concurrent workers
 
 # Monitor progress
-tsk ralph status                       # Check supervisor status
-tsk worker status                      # List all workers
-tsk worker logs --task TASK-001        # View specific worker logs
+tsk ralph status                           # Check supervisor status
+tsk ralph worker status                    # List all workers
+tsk ralph worker logs --task TASK-001      # View specific worker logs
 ```
 
 **Key Features:**
