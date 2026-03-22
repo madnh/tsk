@@ -1,7 +1,8 @@
 project:
-  name: "TSK"
+  name: "My Project"
 
 ralph:
+  auto_push: true
   max_iterations: 10
   cooldown: 60
   retry_max: 10
@@ -23,55 +24,32 @@ ralph:
       #   - Skip tasks with feature "admin-ui" for now
       #   - Prioritize backend tasks over frontend
     implement: |
-      Integration testing is required beyond unit tests. Verify your work actually runs end-to-end:
-
-      Database tasks:
-      - After migrations, verify schema: query sqlite_master or information_schema to confirm tables/columns exist
-      - Insert and query test data to verify constraints and types
-
-      Backend API tasks:
-      - Start the server in background: `go run ./cmd/server &` (or the project's entry point)
-      - Use `curl` to smoke-test each new/modified endpoint
-      - Verify response status codes, JSON structure, and data correctness
-      - Test error cases (404, 400, 401) not just happy paths
-      - Kill the server after testing
-
-      Frontend tasks:
-      - Build the frontend to catch compile errors
-      - If the task adds pages/routes, start the dev server and use the /agent-browser skill to:
-        - Navigate to the new page
-        - Verify it renders without errors
-        - Test basic interactions (click buttons, fill forms, submit)
-        - Check browser console for JS errors
-
-      Full-stack verification:
-      - When a task touches both frontend and backend, verify the full chain:
-        frontend → API call → backend handler → database → response → UI update
+      # Custom instructions for the IMPLEMENT step
+      # Appended when the loop implements a task
+      # Examples:
+      #   - Follow existing code patterns in the codebase
+      #   - Always add table-driven tests
+      #   - Use context.Context for all public functions
+      #   - Run go test with -race flag
     review: |
-      Beyond lint and unit tests, verify integration actually works:
-
-      Database tasks:
-      - Confirm schema exists by querying the database directly
-
-      Backend API tasks:
-      - Start the server, call each new/modified endpoint with curl
-      - Verify correct status codes and response bodies
-      - If endpoints don't respond correctly, mark REVISE with specific failures
-
-      Frontend tasks:
-      - Use /agent-browser to open the page in a real browser
-      - Verify page renders, no console errors, basic interactions work
-      - If UI is broken or non-functional, mark REVISE
-
-      Do NOT mark SHIP if only unit tests pass but no integration verification was done.
-      The level of integration testing should match the task scope:
-      - Engine-only task: unit tests are sufficient
-      - API task: must curl the endpoints
-      - UI task: must verify in browser
-
+      # Custom instructions for the REVIEW step
+      # Appended when the loop reviews implementation against acceptance criteria
+      # Examples:
+      #   - Check for proper error wrapping with fmt.Errorf
+      #   - Verify no TODO comments left in code
+      #   - Ensure all public functions have doc comments
 
 task:
   default_priority: "medium"
+  default_type: "feature"
+
+# phases:
+#   - num: "1"
+#     name: "Setup"
+#     description: "Project setup"
+#   - num: "2"
+#     name: "Implementation"
+#     description: "Core implementation"
 
 doctor:
   required_tools: ["git", "claude"]

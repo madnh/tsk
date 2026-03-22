@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/madnh/tsk/internal/config"
 	"github.com/madnh/tsk/internal/engine"
 	"github.com/madnh/tsk/internal/model"
 	"github.com/madnh/tsk/internal/output"
@@ -22,6 +23,7 @@ var createCmd = &cobra.Command{
 		phase, _ := cmd.Flags().GetString("phase")
 		feature, _ := cmd.Flags().GetString("feature")
 		priority, _ := cmd.Flags().GetString("priority")
+		taskType, _ := cmd.Flags().GetString("type")
 		depends, _ := cmd.Flags().GetString("depends")
 		spec, _ := cmd.Flags().GetString("spec")
 		useStdin, _ := cmd.Flags().GetBool("stdin")
@@ -34,6 +36,15 @@ var createCmd = &cobra.Command{
 		}
 		if feature == "" {
 			output.Fail("--feature is required")
+		}
+
+		// Validate phase exists
+		existingPhase, err := phaseStore.Find(phase)
+		if err != nil {
+			output.Fail(fmt.Sprintf("Failed to check phase: %v", err))
+		}
+		if existingPhase == nil {
+			output.Fail(fmt.Sprintf("Phase not found: %s. Create it first with: tsk phase create --name <name>", phase))
 		}
 
 		id, err := taskStore.NextID()
@@ -86,6 +97,13 @@ var createCmd = &cobra.Command{
 			output.Fail(fmt.Sprintf("Invalid priority: %s. Valid: %s", priority, strings.Join(model.ValidPriorities, ", ")))
 		}
 
+		if taskType == "" {
+			taskType = config.GetDefaultType()
+		}
+		if !model.IsValidType(taskType) {
+			output.Fail(fmt.Sprintf("Invalid type: %s. Valid: %s", taskType, strings.Join(model.ValidTypes, ", ")))
+		}
+
 		task := &model.Task{
 			ID:        id,
 			Title:     title,
@@ -93,6 +111,7 @@ var createCmd = &cobra.Command{
 			Phase:     phase,
 			Feature:   feature,
 			Priority:  priority,
+			Type:      taskType,
 			Depends:   depsList,
 			Spec:      spec,
 			Files:     []string{},
@@ -129,6 +148,7 @@ func init() {
 	createCmd.Flags().String("phase", "", "Phase number (required)")
 	createCmd.Flags().String("feature", "", "Feature name (required)")
 	createCmd.Flags().String("priority", "", "Priority (critical|high|medium|low)")
+	createCmd.Flags().String("type", "", "Task type (feature|bug|docs|refactor|test|chore)")
 	createCmd.Flags().String("depends", "", "Comma-separated dependency task IDs")
 	createCmd.Flags().String("spec", "", "Path to spec file")
 	createCmd.Flags().Bool("stdin", false, "Read body from stdin")

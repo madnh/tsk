@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/madnh/tsk/internal/config"
 	"github.com/madnh/tsk/internal/engine"
 	"github.com/madnh/tsk/internal/model"
 	"github.com/madnh/tsk/internal/output"
@@ -268,10 +269,158 @@ var phaseUpdateBodyCmd = &cobra.Command{
 	},
 }
 
+var phaseCreateCmd = &cobra.Command{
+	Use:   "create",
+	Short: "Create a new phase",
+	Run: func(cmd *cobra.Command, args []string) {
+		name, _ := cmd.Flags().GetString("name")
+		description, _ := cmd.Flags().GetString("description")
+		status, _ := cmd.Flags().GetString("status")
+
+		if name == "" {
+			output.Fail("--name is required")
+		}
+
+		if !model.IsValidPhaseStatus(status) {
+			output.Fail(fmt.Sprintf("Invalid status: %s. Valid: %s", status, strings.Join(model.ValidPhaseStatuses, ", ")))
+		}
+
+		num, err := phaseStore.NextNum()
+		if err != nil {
+			output.Fail(fmt.Sprintf("Failed to get next phase number: %v", err))
+		}
+
+		phase := &model.Phase{
+			Num:         num,
+			Name:        name,
+			Description: description,
+			Status:      status,
+			Body:        "\n",
+			FilePath:    fmt.Sprintf("%s/phase-%s.md", cfg.PhasesDir, num),
+			RawMeta:     make(map[string]string),
+		}
+
+		if err := phaseStore.Write(phase); err != nil {
+			output.Fail(fmt.Sprintf("Failed to write phase: %v", err))
+		}
+
+		output.Print(output.Result{
+			Data: map[string]interface{}{
+				"created":     fmt.Sprintf("phase-%s", num),
+				"num":         num,
+				"name":        name,
+				"description": description,
+				"status":      status,
+			},
+			Pretty: func() {
+				fmt.Printf("\n  Created %sPhase %s: %s%s (%s)\n\n",
+					output.Bold, num, name, output.Reset, status)
+			},
+		})
+	},
+}
+
+var phaseDeleteCmd = &cobra.Command{
+	Use:   "delete <num>",
+	Short: "Delete a phase",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		num := args[0]
+
+		phase, err := phaseStore.Find(num)
+		if err != nil || phase == nil {
+			output.Fail(fmt.Sprintf("Phase not found: %s", num))
+		}
+
+		// Check if any tasks reference this phase
+		tasks, _ := taskStore.All()
+		var referencingTasks []string
+		for _, t := range tasks {
+			if t.Phase == num {
+				referencingTasks = append(referencingTasks, t.ID)
+			}
+		}
+		if len(referencingTasks) > 0 {
+			output.Fail(fmt.Sprintf("Cannot delete phase %s: referenced by tasks %s", num, strings.Join(referencingTasks, ", ")))
+		}
+
+		if err := phaseStore.Delete(num); err != nil {
+			output.Fail(fmt.Sprintf("Failed to delete phase: %v", err))
+		}
+
+		output.Print(output.Result{
+			Data: map[string]interface{}{
+				"deleted": fmt.Sprintf("phase-%s", num),
+			},
+			Pretty: func() {
+				fmt.Printf("\n  Deleted Phase %s: %s\n\n", num, phase.Name)
+			},
+		})
+	},
+}
+
+var phaseSyncCmd = &cobra.Command{
+	Use:   "sync",
+	Short: "Sync phases from tsk.yml config",
+	Run: func(cmd *cobra.Command, args []string) {
+		configPhases := config.GetPhases()
+		if len(configPhases) == 0 {
+			output.Fail("No phases defined in tsk.yml config")
+		}
+
+		var created, skipped []string
+		for _, cp := range configPhases {
+			if cp.Num == "" || cp.Name == "" {
+				continue
+			}
+			existing, _ := phaseStore.Find(cp.Num)
+			if existing != nil {
+				skipped = append(skipped, cp.Num)
+				continue
+			}
+
+			phase := &model.Phase{
+				Num:         cp.Num,
+				Name:        cp.Name,
+				Description: cp.Description,
+				Status:      "defining",
+				Body:        "\n",
+				FilePath:    fmt.Sprintf("%s/phase-%s.md", cfg.PhasesDir, cp.Num),
+				RawMeta:     make(map[string]string),
+			}
+			if err := phaseStore.Write(phase); err != nil {
+				output.Fail(fmt.Sprintf("Failed to write phase %s: %v", cp.Num, err))
+			}
+			created = append(created, cp.Num)
+		}
+
+		output.Print(output.Result{
+			Data: map[string]interface{}{
+				"created": created,
+				"skipped": skipped,
+			},
+			Pretty: func() {
+				fmt.Printf("\n%s%sPhase Sync%s\n\n", output.Bold, output.Cyan, output.Reset)
+				for _, num := range created {
+					fmt.Printf("  %s+ Phase %s created%s\n", output.Green, num, output.Reset)
+				}
+				for _, num := range skipped {
+					fmt.Printf("  %s~ Phase %s skipped (already exists)%s\n", output.Dim, num, output.Reset)
+				}
+				fmt.Println()
+			},
+		})
+	},
+}
+
 func init() {
 	phaseCmd.Flags().String("status", "", "Update phase status")
 	phaseCmd.Flags().String("name", "", "Update phase name")
 	phaseCmd.Flags().String("description", "", "Update phase description")
+
+	phaseCreateCmd.Flags().String("name", "", "Phase name (required)")
+	phaseCreateCmd.Flags().String("description", "", "Phase description")
+	phaseCreateCmd.Flags().String("status", "defining", "Phase status (default: defining)")
 
 	phaseLogCmd.Flags().String("message", "", "Log message")
 	phaseLogCmd.Flags().Bool("stdin", false, "Read message from stdin")
@@ -279,6 +428,9 @@ func init() {
 
 	phaseUpdateBodyCmd.Flags().Bool("stdin", false, "Read body from stdin")
 
+	phaseCmd.AddCommand(phaseCreateCmd)
+	phaseCmd.AddCommand(phaseDeleteCmd)
+	phaseCmd.AddCommand(phaseSyncCmd)
 	phaseCmd.AddCommand(phaseLogCmd)
 	phaseCmd.AddCommand(phaseUpdateBodyCmd)
 	rootCmd.AddCommand(phaseCmd)

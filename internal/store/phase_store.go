@@ -1,10 +1,12 @@
 package store
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/madnh/tsk/internal/model"
@@ -125,6 +127,32 @@ func (s *PhaseStore) Find(num string) (*model.Phase, error) {
 		}
 	}
 	return nil, nil
+}
+
+// NextNum returns the next available phase number as a string
+func (s *PhaseStore) NextNum() (string, error) {
+	phases, err := s.All()
+	if err != nil {
+		return "", err
+	}
+	if len(phases) == 0 {
+		return "1", nil
+	}
+
+	maxNum := 0
+	for _, p := range phases {
+		n, _ := strconv.Atoi(p.Num)
+		if n > maxNum {
+			maxNum = n
+		}
+	}
+	return fmt.Sprintf("%d", maxNum+1), nil
+}
+
+// Delete removes a phase file by number
+func (s *PhaseStore) Delete(num string) error {
+	file := filepath.Join(s.PhasesDir, fmt.Sprintf("phase-%s.md", num))
+	return os.Remove(file)
 }
 
 // ReadBody reads the body portion of a phase, trimmed
