@@ -3,6 +3,7 @@ tsk
 
 # Go / GoReleaser
 dist/
+.gomodcache/
 *.exe
 *.exe~
 *.dll
