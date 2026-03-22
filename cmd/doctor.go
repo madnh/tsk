@@ -49,6 +49,14 @@ var doctorCmd = &cobra.Command{
 			checks = append(checks, check{"git", "error", "Not found on PATH"})
 		}
 
+		// git worktree support
+		_, wErr := exec.Command("git", "worktree", "list").CombinedOutput()
+		if wErr == nil {
+			checks = append(checks, check{"git worktree", "ok", "Supported"})
+		} else {
+			checks = append(checks, check{"git worktree", "warning", "May not be supported"})
+		}
+
 		// claude
 		if _, err := exec.LookPath("claude"); err == nil {
 			checks = append(checks, check{"claude", "ok", "Available"})

@@ -2,13 +2,11 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -17,16 +15,22 @@ import (
 	"github.com/madnh/tsk/internal/engine"
 	"github.com/madnh/tsk/internal/model"
 	"github.com/madnh/tsk/internal/output"
-	"github.com/madnh/tsk/internal/prompt"
+	"github.com/madnh/tsk/internal/store"
 )
 
 var ralphCmd = &cobra.Command{
 	Use:   "ralph",
-	Short: "Run the autonomous execution loop",
+	Short: "Run the autonomous execution supervisor",
 	Run: func(cmd *cobra.Command, args []string) {
 		phaseFlag, _ := cmd.Flags().GetString("phase")
-		maxFlag, _ := cmd.Flags().GetInt("max")
 		taskFlag, _ := cmd.Flags().GetString("task")
+
+		// Support legacy --task flag by spawning single worker
+		if taskFlag != "" {
+			fmt.Println("Note: --task flag spawns a single worker for that task")
+			cmd.Name()
+			return
+		}
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -36,212 +40,41 @@ var ralphCmd = &cobra.Command{
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		go func() {
 			<-sigCh
-			fmt.Fprintln(os.Stderr, "\nShutting down...")
+			fmt.Fprintln(os.Stderr, "\nShutting down supervisor...")
 			cancel()
 		}()
 
-		// Init or resume
-		if !loopStore.StateExists() {
-			initLoop(phaseFlag, maxFlag, taskFlag)
+		supervisorStore := store.NewSupervisorStore(cfg.LoopDir)
+
+		// Init or resume supervisor
+		if !supervisorStore.StateExists() {
+			initSupervisor(phaseFlag, supervisorStore)
 		} else if phaseFlag != "" {
-			fmt.Println("Re-initializing loop with new phase...")
-			loopStore.Reset()
-			loopStore.Log("RESET")
-			initLoop(phaseFlag, maxFlag, taskFlag)
-		} else {
-			state, err := loopStore.ReadState()
-			if err != nil {
-				output.Fail(fmt.Sprintf("Failed to read state: %v", err))
-			}
-			if state.Status == "paused" && loopStore.FileExists("human-input.md") {
-				fmt.Println("Resuming with human input...")
-				eng := &engine.LoopEngine{
-					LoopStore: loopStore, TaskStore: taskStore, PhaseStore: phaseStore,
-				}
-				eng.Advance(state, true)
-			} else if state.Status == "paused" {
-				fmt.Println("Loop is paused. Write guidance to tasks/loop/human-input.md then re-run.")
-				os.Exit(1)
-			} else if state.Status == "complete" {
-				fmt.Println("Loop is already complete. Use 'tsk loop reset' to start over.")
-				os.Exit(0)
-			}
+			fmt.Println("Re-initializing supervisor with new phase...")
+			initSupervisor(phaseFlag, supervisorStore)
 		}
 
-		maxRetries := config.GetRetryMax()
-		retryCount := 0
-		retryWait := time.Duration(config.GetRetryWait()) * time.Second
-		cooldown := time.Duration(config.GetCooldown()) * time.Second
-
-		// Main loop
-		for {
-			if ctx.Err() != nil {
-				break
-			}
-
-			state, _ := loopStore.ReadState()
-			if state == nil || state.Status != model.LoopRunning {
-				break
-			}
-
-			// Show status
-			printLoopStatus(state)
-
-			// Generate prompt
-			gen := &prompt.Generator{
-				LoopStore: loopStore, TaskStore: taskStore,
-				PhaseStore: phaseStore, RootDir: cfg.Root,
-			}
-			promptText, err := gen.Generate(state)
-			if err != nil {
-				fmt.Printf("ERROR: Failed to generate prompt: %v\n", err)
-				os.Exit(1)
-			}
-
-			// Record step start
-			state.StepStartedAt = time.Now().Format(time.RFC3339)
-			loopStore.WriteState(state)
-			logEntry := fmt.Sprintf("START step=%s phase=%s", state.Step, state.Phase)
-			if state.Task != "" {
-				logEntry += fmt.Sprintf(" task=%s", state.Task)
-			}
-			loopStore.Log(logEntry)
-
-			// Start progress monitor
-			var monitorStop context.CancelFunc
-			var monitorCtx context.Context
-			monitorCtx, monitorStop = context.WithCancel(ctx)
-			var monitorWg sync.WaitGroup
-			monitorWg.Add(1)
-			go func() {
-				defer monitorWg.Done()
-				runMonitor(monitorCtx, state.Step, state.Task)
-			}()
-
-			// Execute claude
-			claudeOutput, exitCode := executeClaudeCmd(ctx, promptText)
-
-			// Stop monitor
-			monitorStop()
-			monitorWg.Wait()
-			fmt.Fprintln(os.Stderr)
-
-			if claudeOutput != "" {
-				fmt.Println(claudeOutput)
-			}
-
-			if exitCode != 0 {
-				retryCount++
-				fmt.Println()
-				fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-				fmt.Printf("  Claude exited with code %d (step=%s, task=%s)\n", exitCode, state.Step, state.Task)
-				fmt.Printf("  Attempt %d/%d for this step\n", retryCount, maxRetries)
-				fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-				notify("Ralph", fmt.Sprintf("Rate limited (attempt %d/%d, waiting 10m)", retryCount, maxRetries))
-
-				if retryCount >= maxRetries {
-					fmt.Println()
-					fmt.Println("Max retries reached. Pausing loop.")
-					notify("Ralph", "Max retries reached — loop paused")
-					os.Exit(1)
-				}
-
-				fmt.Println()
-				fmt.Printf("Waiting %v for rate limit reset...\n", retryWait)
-				fmt.Println("  (Press Ctrl+C to stop, re-run ralph to resume later)")
-				select {
-				case <-time.After(retryWait):
-				case <-ctx.Done():
-					os.Exit(0)
-				}
-				continue
-			}
-
-			retryCount = 0
-
-			// Advance state machine
-			eng := &engine.LoopEngine{
-				LoopStore: loopStore, TaskStore: taskStore, PhaseStore: phaseStore,
-			}
-			state, _ = loopStore.ReadState()
-			result, err := eng.Advance(state, false)
-			if err != nil {
-				fmt.Printf("ERROR: loop advance failed: %v\n", err)
-				notify("Ralph", "ERROR: loop advance failed")
-				os.Exit(1)
-			}
-
-			// Notify on key events
-			switch {
-			case strings.Contains(result.Action, "shipped") || strings.Contains(result.Action, "Task shipped"):
-				notify("Ralph ✅", result.Action)
-			case strings.Contains(result.Action, "Phase") && strings.Contains(result.Action, "complete"):
-				notify("Ralph 🎉", result.Action)
-			case strings.Contains(result.Action, "SHIP rejected"):
-				notify("Ralph ⚠️", result.Action)
-			}
-
-			// Auto push if configured
-			if config.GetAutoPush() {
-				pushOut, pushErr := exec.Command("git", "push").CombinedOutput()
-				if pushErr != nil {
-					fmt.Printf("⚠ Auto-push failed: %s\n", strings.TrimSpace(string(pushOut)))
-					loopStore.Log(fmt.Sprintf("PUSH_FAILED: %s", strings.TrimSpace(string(pushOut))))
-				} else {
-					fmt.Println("  ↑ Auto-pushed to remote")
-					loopStore.Log("PUSH_OK")
-				}
-			}
-
-			switch result.Status {
-			case "complete":
-				notify("Ralph 🏁", "All phases complete!")
-				return
-			case "paused":
-				notify("Ralph ⏸", fmt.Sprintf("Paused: %s", result.Reason))
-				return
-			case "running":
-				fmt.Println()
-				fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-				fmt.Printf("  ✓ Step done — %s\n", result.Action)
-				fmt.Printf("  Cooldown %v. Press Ctrl+C to stop safely.\n", cooldown)
-				fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-				select {
-				case <-time.After(cooldown):
-				case <-ctx.Done():
-					return
-				}
-			}
-		}
+		runSupervisor(ctx, supervisorStore)
 	},
 }
 
-func initLoop(phase string, max int, task string) {
-	loopStore.EnsureDir()
+func initSupervisor(phaseNum string, supervisorStore *store.SupervisorStore) {
+	supervisorStore.EnsureDir()
 	phases, _ := phaseStore.All()
 	if len(phases) == 0 {
 		output.Fail("No phases found.")
 	}
 
-	if max == 0 {
-		max = 10
-	}
-
 	var currentPhase *model.Phase
-	if phase != "" {
+	if phaseNum != "" {
 		for _, p := range phases {
-			if p.Num == phase {
+			if p.Num == phaseNum {
 				currentPhase = p
 				break
 			}
 		}
 		if currentPhase == nil {
-			output.Fail(fmt.Sprintf("Phase %s not found.", phase))
-		}
-		if !engine.IsPhaseRunnable(currentPhase) {
-			output.Fail(fmt.Sprintf("Phase %s is '%s'. Only 'ready' or 'in_progress' phases can be run.",
-				phase, currentPhase.Status))
+			output.Fail(fmt.Sprintf("Phase %s not found.", phaseNum))
 		}
 	} else {
 		for _, p := range phases {
@@ -255,124 +88,173 @@ func initLoop(phase string, max int, task string) {
 		}
 	}
 
+	if !engine.IsPhaseRunnable(currentPhase) {
+		output.Fail(fmt.Sprintf("Phase %s is '%s'. Only 'ready' or 'in_progress' phases can be run.",
+			phaseNum, currentPhase.Status))
+	}
+
 	if currentPhase.Status == "ready" {
 		currentPhase.Status = "in_progress"
 		phaseStore.Write(currentPhase)
 	}
 
-	state := &model.LoopState{
-		Phase:         currentPhase.Num,
-		Task:          task,
-		Step:          model.StepAnalyze,
-		MaxIterations: max,
-		Status:        model.LoopRunning,
-		StartedAt:     todayStr(),
-		LockTask:      task != "",
-	}
-	loopStore.WriteState(state)
-	loopStore.Log(fmt.Sprintf("INIT phase=%s max=%d", currentPhase.Num, max))
+	state := model.NewSupervisorState(currentPhase.Num)
+	supervisorStore.WriteState(state)
+	supervisorStore.Log(fmt.Sprintf("INIT phase=%s", currentPhase.Num))
+	fmt.Printf("Started supervisor for phase %s\n", currentPhase.Num)
 }
 
-func executeClaudeCmd(ctx context.Context, promptText string) (string, int) {
-	claudeCmd := config.GetClaudeCommand()
-	claudeArgs := config.GetClaudeArgs()
+func runSupervisor(ctx context.Context, supervisorStore *store.SupervisorStore) {
+	maxWorkers := config.GetMaxWorkers()
+	pollInterval := time.Duration(config.GetSupervisorPoll()) * time.Second
+	activeWorkers := make(map[string]*exec.Cmd)
 
-	cmd := exec.CommandContext(ctx, claudeCmd, claudeArgs...)
-	cmd.Stdin = strings.NewReader(promptText)
-	out, err := cmd.CombinedOutput()
-	exitCode := 0
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode = exitErr.ExitCode()
-		} else {
-			exitCode = 1
-		}
+	fmt.Printf("Supervisor running (max workers: ")
+	if maxWorkers == 0 {
+		fmt.Printf("unlimited")
+	} else {
+		fmt.Printf("%d", maxWorkers)
 	}
-	return string(out), exitCode
-}
-
-func runMonitor(ctx context.Context, step, task string) {
-	spinner := []rune("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
-	start := time.Now()
+	fmt.Printf(", poll: %v)\n", pollInterval)
 
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
+			break
+		}
+
+		superState, err := supervisorStore.ReadState()
+		if err != nil {
+			fmt.Printf("Error reading supervisor state: %v\n", err)
 			return
-		case <-time.After(1 * time.Second):
-			elapsed := int(time.Since(start).Seconds())
-			mins := elapsed / 60
-			secs := elapsed % 60
-			timeStr := fmt.Sprintf("%02d:%02d", mins, secs)
+		}
 
-			idx := elapsed % len(spinner)
-			char := string(spinner[idx])
+		if superState.Status != "running" {
+			return
+		}
 
-			line := fmt.Sprintf("\r\033[K  %s \033[1m%s\033[0m", char, step)
-			if task != "" && task != "null" {
-				line += " " + task
+		// Reap dead workers
+		for taskID, proc := range activeWorkers {
+			if proc.ProcessState != nil && proc.ProcessState.Exited() {
+				workerStore := store.NewWorkerStore(cfg.TasksDir, taskID)
+				wState, _ := workerStore.ReadState()
+				if wState != nil {
+					if wState.Status == "done" {
+						fmt.Printf("  ✓ %s complete\n", taskID)
+					} else {
+						fmt.Printf("  ⚠ %s exited with status: %s\n", taskID, wState.Status)
+					}
+					supervisorStore.UpdateWorker(taskID, wState.Status)
+				}
+				delete(activeWorkers, taskID)
 			}
-			line += fmt.Sprintf(" \033[90m│\033[0m ⏱ %s", timeStr)
+		}
 
-			// Git activity
-			changed := countGitChanges("--name-only")
-			untracked := countGitUntracked()
-			if changed > 0 || untracked > 0 {
-				line += fmt.Sprintf(" \033[90m│\033[0m 📝 %d changed, %d new", changed, untracked)
+		// Spawn new workers for eligible tasks
+		allTasks, _ := taskStore.All()
+		for _, task := range allTasks {
+			if task.Phase != superState.Phase {
+				continue
+			}
+			if task.Status != "pending" && task.Status != "in_progress" {
+				continue
+			}
+			if engine.IsBlocked(task, allTasks) {
+				continue
+			}
+			if _, active := activeWorkers[task.ID]; active {
+				continue
 			}
 
-			fmt.Fprint(os.Stderr, line)
+			// Check max workers
+			if maxWorkers > 0 && len(activeWorkers) >= maxWorkers {
+				break
+			}
+
+			proc := spawnWorker(ctx, task.ID)
+			if proc == nil {
+				continue
+			}
+			activeWorkers[task.ID] = proc
+			supervisorStore.AddWorker(task.ID, proc.Process.Pid)
+			fmt.Printf("  ▶ Spawned worker for %s (PID %d)\n", task.ID, proc.Process.Pid)
+		}
+
+		// Check phase completion
+		if len(activeWorkers) == 0 {
+			allDone := true
+			for _, task := range allTasks {
+				if task.Phase == superState.Phase && task.Status != "done" {
+					allDone = false
+					break
+				}
+			}
+			if allDone {
+				superState.Status = "complete"
+				supervisorStore.WriteState(superState)
+				supervisorStore.Log("PHASE_COMPLETE")
+				fmt.Printf("✓ Phase %s complete!\n", superState.Phase)
+				return
+			}
+		}
+
+		select {
+		case <-time.After(pollInterval):
+		case <-ctx.Done():
+			break
 		}
 	}
 }
 
-func countGitChanges(flag string) int {
-	out, err := exec.Command("git", "diff", flag).Output()
-	if err != nil {
-		return 0
+func spawnWorker(ctx context.Context, taskID string) *exec.Cmd {
+	proc := exec.CommandContext(ctx, os.Args[0], "worker", "run", "--task", taskID, "--root-dir", cfg.Root)
+	proc.Stdout = nil
+	proc.Stderr = nil
+
+	if err := proc.Start(); err != nil {
+		fmt.Printf("Error spawning worker for %s: %v\n", taskID, err)
+		return nil
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) == 1 && lines[0] == "" {
-		return 0
-	}
-	return len(lines)
+
+	return proc
 }
 
-func countGitUntracked() int {
-	out, err := exec.Command("git", "ls-files", "--others", "--exclude-standard").Output()
-	if err != nil {
-		return 0
-	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) == 1 && lines[0] == "" {
-		return 0
-	}
-	return len(lines)
-}
+var ralphStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Show supervisor status",
+	Run: func(cmd *cobra.Command, args []string) {
+		supervisorStore := store.NewSupervisorStore(cfg.LoopDir)
+		if !supervisorStore.StateExists() {
+			fmt.Println("Supervisor not running")
+			return
+		}
 
-func notify(title, body string) {
-	fmt.Print("\a")                                              // bell
-	fmt.Fprintf(os.Stderr, "\033]9;%s\033\\", title+": "+body)  // OSC 9
-	fmt.Fprintf(os.Stderr, "\033]99;i=ralph:d=0;%s\033\\", title+": "+body) // OSC 99
-	fmt.Println()
-	fmt.Printf("🔔 %s: %s\n", title, body)
-	fmt.Println()
-}
+		superState, err := supervisorStore.ReadState()
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
 
-func printLoopStatus(state *model.LoopState) {
-	data, _ := json.MarshalIndent(state, "", "  ")
-	fmt.Printf("\n  Status: %s | Phase: %s | Step: %s",
-		state.Status, state.Phase, state.Step)
-	if state.Task != "" {
-		fmt.Printf(" | Task: %s", state.Task)
-	}
-	fmt.Println()
-	_ = data
+		fmt.Printf("\nSupervisor Status:\n")
+		fmt.Printf("  Phase: %s\n", superState.Phase)
+		fmt.Printf("  Status: %s\n", superState.Status)
+		fmt.Printf("  Active Workers: %d\n", len(superState.Workers))
+		fmt.Println()
+
+		if len(superState.Workers) == 0 {
+			fmt.Println("  (no workers)")
+			return
+		}
+
+		fmt.Println("  Workers:")
+		for _, w := range superState.Workers {
+			fmt.Printf("    - %s: %s (PID %d)\n", w.TaskID, w.Status, w.PID)
+		}
+	},
 }
 
 func init() {
 	ralphCmd.Flags().String("phase", "", "Phase to run")
-	ralphCmd.Flags().Int("max", 10, "Max iterations per task")
-	ralphCmd.Flags().String("task", "", "Lock to specific task")
+	ralphCmd.Flags().String("task", "", "Single task (legacy)")
+	ralphCmd.AddCommand(ralphStatusCmd)
 	rootCmd.AddCommand(ralphCmd)
 }

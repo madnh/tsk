@@ -192,3 +192,27 @@ func GetUpdateTimeout() int {
 	}
 	return v
 }
+
+// GetWorkflow returns the workflow steps for a task type from config
+// Falls back to ["implement", "review"] if not configured
+func GetWorkflow(taskType string) []string {
+	workflow := viper.GetStringSlice("ralph.workflows." + taskType)
+	if len(workflow) == 0 {
+		return []string{"implement", "review"}
+	}
+	return workflow
+}
+
+// GetMaxWorkers returns max concurrent workers, 0 means unlimited
+func GetMaxWorkers() int {
+	return viper.GetInt("ralph.max_workers")
+}
+
+// GetSupervisorPoll returns supervisor poll interval in seconds, default 10
+func GetSupervisorPoll() int {
+	v := viper.GetInt("ralph.supervisor_poll")
+	if v == 0 {
+		return 10
+	}
+	return v
+}

@@ -2,29 +2,40 @@ project:
   name: "My Project"
 
 ralph:
+  auto_push: true
   max_iterations: 10
+  max_workers: 0
   cooldown: 60
+  supervisor_poll: 10
   retry_max: 10
   retry_wait: 600
   claude:
     command: "claude"
     args: ["-p", "--dangerously-skip-permissions"]
+  workflows:
+    feature: [implement, review]
+    bug: [analyze, implement, review]
+    docs: [write, review]
+    plan: [brainstorm, spec, review]
+    refactor: [analyze, implement, review]
+    test: [implement, review]
+    chore: [implement, review]
   prompt:
     all: |
-      # Custom instructions appended to ALL loop steps (analyze, implement, review)
+      # Custom instructions appended to ALL steps (analyze, implement, review, write, brainstorm, spec, test)
       # Examples:
       #   - Always write code comments in English
       #   - Use conventional commits: feat(TASK-XXX): description
       #   - Prefer table-driven tests in Go
     analyze: |
       # Custom instructions for the ANALYZE step
-      # Appended when the loop checks phase status to decide next action
+      # Appended when analyzing phase status or task requirements
       # Examples:
       #   - Skip tasks with feature "admin-ui" for now
       #   - Prioritize backend tasks over frontend
     implement: |
       # Custom instructions for the IMPLEMENT step
-      # Appended when the loop implements a task
+      # Appended when implementing a task
       # Examples:
       #   - Follow existing code patterns in the codebase
       #   - Always add table-driven tests
@@ -32,11 +43,26 @@ ralph:
       #   - Run go test with -race flag
     review: |
       # Custom instructions for the REVIEW step
-      # Appended when the loop reviews implementation against acceptance criteria
+      # Appended when reviewing implementation against acceptance criteria
       # Examples:
       #   - Check for proper error wrapping with fmt.Errorf
       #   - Verify no TODO comments left in code
       #   - Ensure all public functions have doc comments
+    write: |
+      # Custom instructions for the WRITE step (for docs tasks)
+      # Examples:
+      #   - Use clear, concise English
+      #   - Include examples and code snippets
+    brainstorm: |
+      # Custom instructions for the BRAINSTORM step (for plan tasks)
+      # Examples:
+      #   - Consider multiple approaches
+      #   - List pros and cons of each approach
+    spec: |
+      # Custom instructions for the SPEC step (for plan tasks)
+      # Examples:
+      #   - Create a detailed technical specification
+      #   - Include architecture diagrams
 
 task:
   default_priority: "medium"

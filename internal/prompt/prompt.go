@@ -59,6 +59,49 @@ func (g *Generator) Generate(state *model.LoopState) (string, error) {
 	return prompt, nil
 }
 
+// GenerateWorker creates a prompt for a worker step
+func (g *Generator) GenerateWorker(state *model.WorkerState, task *model.Task, workerStore *store.WorkerStore) (string, error) {
+	if task == nil {
+		return "", fmt.Errorf("task not found")
+	}
+
+	step := state.CurrentStep()
+	if step == "" {
+		return "", fmt.Errorf("no current step")
+	}
+
+	var prompt string
+	var err error
+
+	switch step {
+	case "analyze":
+		prompt = g.analyzeWorkerPrompt(task, workerStore)
+	case "implement":
+		prompt, err = g.implementWorkerPrompt(state, task, workerStore)
+	case "review":
+		prompt, err = g.reviewWorkerPrompt(state, task, workerStore)
+	case "write":
+		prompt, err = g.writeWorkerPrompt(state, task, workerStore)
+	case "brainstorm":
+		prompt, err = g.brainstormWorkerPrompt(state, task, workerStore)
+	case "spec":
+		prompt, err = g.specWorkerPrompt(state, task, workerStore)
+	case "test":
+		prompt, err = g.testWorkerPrompt(state, task, workerStore)
+	default:
+		return "", fmt.Errorf("unknown worker step: %s", step)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	// Append custom prompts
+	prompt = g.appendCustomPrompts(prompt, step)
+
+	return prompt, nil
+}
+
 func (g *Generator) analyzePrompt(phase *model.Phase, phaseTasks []*model.Task, allTasks []*model.Task) string {
 	taskListStr := "  (no tasks)"
 	if len(phaseTasks) > 0 {
@@ -328,4 +371,319 @@ func isBlocked(task *model.Task, allTasks []*model.Task) bool {
 		}
 	}
 	return false
+}
+
+// Worker prompts
+
+func (g *Generator) analyzeWorkerPrompt(task *model.Task, workerStore *store.WorkerStore) string {
+	acMatch := regexp.MustCompile(`## Acceptance Criteria\n([\s\S]*?)(?:\n## |\s*$)`).FindStringSubmatch(task.Body)
+	ac := "(none found in task body)"
+	if len(acMatch) > 1 {
+		ac = strings.TrimSpace(acMatch[1])
+	}
+
+	specSection := "No spec file linked."
+	if task.Spec != "" {
+		specSection = fmt.Sprintf("Read: %s", task.Spec)
+	}
+
+	return fmt.Sprintf(`You are analyzing %s: %s
+
+## Spec
+%s
+
+## Acceptance Criteria
+%s
+
+## Task Description
+%s
+
+## Instructions
+1. Read the task and spec
+2. Understand the requirements and acceptance criteria
+3. Assess what work needs to be done
+
+Write ONE of these results to tasks/workers/%s/step-result.txt:
+- "HAS_TASKS" — if there is clear work to implement
+- "ALL_TASKS_DONE" — if the work is already complete (unlikely)
+- "BLOCKED" — if you cannot proceed (include details in tasks/workers/%s/feedback.md)
+
+IMPORTANT: Write ONLY the result keyword to step-result.txt (no extra text).
+Do NOT start implementing yet. Only analyze and write the result file.`,
+		task.ID, task.Title,
+		specSection, ac,
+		task.Body,
+		task.ID,
+		task.ID)
+}
+
+func (g *Generator) implementWorkerPrompt(state *model.WorkerState, task *model.Task, workerStore *store.WorkerStore) (string, error) {
+	acMatch := regexp.MustCompile(`## Acceptance Criteria\n([\s\S]*?)(?:\n## |\s*$)`).FindStringSubmatch(task.Body)
+	ac := "(none found in task body)"
+	if len(acMatch) > 1 {
+		ac = strings.TrimSpace(acMatch[1])
+	}
+
+	feedback := workerStore.ReadFile("feedback.md")
+	humanInput := workerStore.ReadFile("human-input.md")
+
+	feedbackSection := "## Previous Feedback\nFirst iteration — no feedback yet."
+	if feedback != "" {
+		feedbackSection = fmt.Sprintf("## Previous Feedback\n%s", feedback)
+	}
+
+	humanSection := ""
+	if humanInput != "" {
+		humanSection = fmt.Sprintf("\n## Human Guidance\n%s", humanInput)
+	}
+
+	feedbackInstr := "Plan your implementation approach"
+	if feedback != "" {
+		feedbackInstr = "Address the feedback from previous review"
+	}
+	humanInstr := ""
+	if humanInput != "" {
+		humanInstr = "\n3. Follow the human guidance provided above"
+	}
+
+	specSection := "Review the task description above"
+	if task.Spec != "" {
+		specSection = fmt.Sprintf("Read the spec file: %s", task.Spec)
+	}
+
+	workerDir := fmt.Sprintf("tasks/workers/%s", task.ID)
+
+	return fmt.Sprintf(`You are implementing %s: %s
+Iteration %d/%d for this task.
+
+## Acceptance Criteria
+%s
+
+%s
+%s
+
+## Instructions
+1. %s
+2. %s%s
+3. Implement code with tests
+4. Run: `+"`go test ./... -count=1`"+` and `+"`go vet ./...`"+`
+5. Commit your changes using conventional commits with the task ID as scope:
+   `+"```bash"+`
+   git add <files you changed>
+   git commit -m "feat(%s): <short description>"
+   `+"```"+`
+   - Use `+"`feat`"+` for new features, `+"`fix`"+` for bug fixes, `+"`refactor`"+` for refactoring
+   - You may make multiple commits for logically separate changes
+6. Write a summary of what you did to %s/work-summary.md
+7. If blocked on something you cannot resolve:
+   - Write "BLOCKED" to %s/step-result.txt
+   - Write your questions/blockers to %s/feedback.md
+
+IMPORTANT: When done implementing, do NOT write to step-result.txt — the loop will advance automatically.
+IMPORTANT: Always commit your code changes before finishing. Uncommitted work is invisible to the next iteration.
+State persists through FILES ONLY. You have no memory of previous iterations.`,
+		task.ID, task.Title,
+		state.Iteration+1, state.MaxIterations,
+		ac,
+		feedbackSection, humanSection,
+		specSection, feedbackInstr, humanInstr,
+		task.ID,
+		workerDir, workerDir, workerDir), nil
+}
+
+func (g *Generator) reviewWorkerPrompt(state *model.WorkerState, task *model.Task, workerStore *store.WorkerStore) (string, error) {
+	acMatch := regexp.MustCompile(`## Acceptance Criteria\n([\s\S]*?)(?:\n## |\s*$)`).FindStringSubmatch(task.Body)
+	ac := "(none found in task body)"
+	if len(acMatch) > 1 {
+		ac = strings.TrimSpace(acMatch[1])
+	}
+
+	filesList := "(none tracked)"
+	if len(task.Files) > 0 {
+		filesList = strings.Join(task.Files, ", ")
+	}
+
+	workSummary := workerStore.ReadFile("work-summary.md")
+	if workSummary == "" {
+		workSummary = "(no summary provided)"
+	}
+
+	workerDir := fmt.Sprintf("tasks/workers/%s", task.ID)
+
+	return fmt.Sprintf(`You are reviewing %s: %s
+
+Task file: tasks/items/%s.md
+
+## Acceptance Criteria
+%s
+
+## Modified Files
+%s
+
+## Work Summary
+%s
+
+## Instructions
+1. Read the modified files listed above
+2. Run: `+"`go test ./... -count=1`"+`
+3. Run: `+"`go vet ./...`"+`
+4. Check that changes are committed:
+   Run `+"`git log --oneline -10`"+` and verify there are commits with "%s" in the message.
+   If code changes exist but are NOT committed, this is a REVISE — feedback: "commit your changes".
+5. For EACH acceptance criterion, verify against actual code:
+   - If met: check it off in the task file (change `+"`- [ ]`"+` to `+"`- [x]`"+`)
+   - If NOT met: leave unchecked and note what's missing
+
+6. After checking all criteria, update the task file tasks/items/%s.md:
+   Replace each verified `+"`- [ ]`"+` with `+"`- [x]`"+` in the Acceptance Criteria section.
+
+7. Decide the result:
+   If ALL criteria are checked AND tests pass AND changes are committed:
+     Write "SHIP" to %s/step-result.txt
+   If any criterion is NOT met OR changes are uncommitted:
+     Write "REVISE" to %s/step-result.txt
+     Write specific, actionable feedback to %s/feedback.md
+     Be precise: which criterion failed, what's missing, what needs to change.
+
+IMPORTANT: Write ONLY "SHIP" or "REVISE" to step-result.txt (no extra text).
+IMPORTANT: You MUST update the AC checkboxes in the task file before writing the result.`,
+		task.ID, task.Title,
+		task.ID, ac, filesList, workSummary,
+		task.ID, task.ID,
+		workerDir, workerDir, workerDir), nil
+}
+
+func (g *Generator) writeWorkerPrompt(state *model.WorkerState, task *model.Task, workerStore *store.WorkerStore) (string, error) {
+	acMatch := regexp.MustCompile(`## Acceptance Criteria\n([\s\S]*?)(?:\n## |\s*$)`).FindStringSubmatch(task.Body)
+	ac := "(none found in task body)"
+	if len(acMatch) > 1 {
+		ac = strings.TrimSpace(acMatch[1])
+	}
+
+	feedback := workerStore.ReadFile("feedback.md")
+	humanInput := workerStore.ReadFile("human-input.md")
+
+	feedbackSection := "## Previous Feedback\nFirst iteration — no feedback yet."
+	if feedback != "" {
+		feedbackSection = fmt.Sprintf("## Previous Feedback\n%s", feedback)
+	}
+
+	humanSection := ""
+	if humanInput != "" {
+		humanSection = fmt.Sprintf("\n## Human Guidance\n%s", humanInput)
+	}
+
+	specSection := "Review the task description"
+	if task.Spec != "" {
+		specSection = fmt.Sprintf("Read the spec file: %s", task.Spec)
+	}
+
+	workerDir := fmt.Sprintf("tasks/workers/%s", task.ID)
+
+	return fmt.Sprintf(`You are writing documentation for %s: %s
+Iteration %d/%d for this task.
+
+## Acceptance Criteria
+%s
+
+%s
+%s
+
+## Instructions
+1. %s
+2. Write clear, well-structured documentation
+3. Commit your changes with:
+   `+"```bash"+`
+   git add <files you changed>
+   git commit -m "docs(%s): <short description>"
+   `+"```"+`
+4. Write a summary to %s/work-summary.md
+5. If blocked:
+   - Write "BLOCKED" to %s/step-result.txt
+   - Write details to %s/feedback.md
+
+IMPORTANT: When done writing, do NOT write to step-result.txt — the loop will advance automatically.
+IMPORTANT: Always commit your changes before finishing.`,
+		task.ID, task.Title,
+		state.Iteration+1, state.MaxIterations,
+		ac,
+		feedbackSection, humanSection,
+		specSection,
+		task.ID,
+		workerDir, workerDir, workerDir), nil
+}
+
+func (g *Generator) brainstormWorkerPrompt(state *model.WorkerState, task *model.Task, workerStore *store.WorkerStore) (string, error) {
+	specSection := "Review the task description"
+	if task.Spec != "" {
+		specSection = fmt.Sprintf("Read the spec file: %s", task.Spec)
+	}
+
+	workerDir := fmt.Sprintf("tasks/workers/%s", task.ID)
+
+	return fmt.Sprintf(`You are brainstorming approaches for %s: %s
+
+## Instructions
+1. %s
+2. Explore multiple approaches or design directions
+3. For each approach, list pros and cons
+4. Write your brainstorm output to %s/brainstorm-output.md
+5. If blocked:
+   - Write "BLOCKED" to %s/step-result.txt
+   - Write details to %s/feedback.md
+
+IMPORTANT: When done brainstorming, do NOT write to step-result.txt — the loop will advance automatically.`,
+		task.ID, task.Title,
+		specSection,
+		workerDir, workerDir, workerDir), nil
+}
+
+func (g *Generator) specWorkerPrompt(state *model.WorkerState, task *model.Task, workerStore *store.WorkerStore) (string, error) {
+	brainstormOutput := workerStore.ReadFile("brainstorm-output.md")
+	if brainstormOutput == "" {
+		brainstormOutput = "(no brainstorm output found)"
+	}
+
+	workerDir := fmt.Sprintf("tasks/workers/%s", task.ID)
+
+	return fmt.Sprintf(`You are writing a formal specification for %s: %s
+
+## Brainstorm Output
+%s
+
+## Instructions
+1. Read the brainstorm output above
+2. Select the best approach and create a detailed technical specification
+3. Include: architecture, components, data flow, implementation steps
+4. Write your spec to %s/spec.md
+5. If blocked:
+   - Write "BLOCKED" to %s/step-result.txt
+   - Write details to %s/feedback.md
+
+IMPORTANT: When done, do NOT write to step-result.txt — the loop will advance automatically.`,
+		task.ID, task.Title,
+		brainstormOutput,
+		workerDir, workerDir, workerDir), nil
+}
+
+func (g *Generator) testWorkerPrompt(state *model.WorkerState, task *model.Task, workerStore *store.WorkerStore) (string, error) {
+	workerDir := fmt.Sprintf("tasks/workers/%s", task.ID)
+
+	return fmt.Sprintf(`You are testing %s: %s
+
+## Instructions
+1. Run the full test suite: `+"`go test ./... -count=1 -v`"+`
+2. Check code coverage: `+"`go test ./... -cover`"+`
+3. Run: `+"`go vet ./...`"+`
+4. Write a summary to %s/work-summary.md including:
+   - Test results
+   - Coverage percentage
+   - Any failures or issues
+5. If any tests fail or code has issues:
+   - Write "BLOCKED" to %s/step-result.txt
+   - Write details to %s/feedback.md
+
+IMPORTANT: When done testing, do NOT write to step-result.txt — the loop will advance automatically.`,
+		task.ID, task.Title,
+		workerDir, workerDir, workerDir), nil
 }
