@@ -6,6 +6,9 @@ var ValidStatuses = []string{"pending", "in_progress", "review", "done"}
 // Valid priorities
 var ValidPriorities = []string{"critical", "high", "medium", "low"}
 
+// Valid task types
+var ValidTypes = []string{"feature", "bug", "docs", "refactor", "test", "chore"}
+
 // PriorityOrder maps priority to sort order (lower = higher priority)
 var PriorityOrder = map[string]int{
 	"critical": 0,
@@ -30,6 +33,7 @@ type Task struct {
 	Phase     string   `json:"phase"`
 	Feature   string   `json:"feature"`
 	Priority  string   `json:"priority"`
+	Type      string   `json:"type"`
 	Depends   []string `json:"depends"`
 	Spec      string   `json:"spec"`
 	Files     []string `json:"files"`
@@ -49,6 +53,7 @@ func (t *Task) MetaMap() []KV {
 		{"phase", t.Phase},
 		{"feature", t.Feature},
 		{"priority", t.Priority},
+		{"type", t.Type},
 		{"depends", t.Depends},
 		{"spec", t.Spec},
 		{"files", t.Files},
@@ -78,6 +83,16 @@ func IsValidStatus(s string) bool {
 func IsValidPriority(p string) bool {
 	for _, v := range ValidPriorities {
 		if v == p {
+			return true
+		}
+	}
+	return false
+}
+
+// IsValidType checks if a task type is valid
+func IsValidType(t string) bool {
+	for _, v := range ValidTypes {
+		if v == t {
 			return true
 		}
 	}

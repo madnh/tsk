@@ -34,6 +34,7 @@ var showCmd = &cobra.Command{
 				"phase":     task.Phase,
 				"feature":   task.Feature,
 				"priority":  task.Priority,
+				"type":      task.Type,
 				"depends":   task.Depends,
 				"spec":      task.Spec,
 				"files":     task.Files,
@@ -47,6 +48,7 @@ var showCmd = &cobra.Command{
 				fmt.Printf("\n%s%s: %s%s%s\n\n",
 					output.Bold, output.ColorID(task.ID), output.Bold, task.Title, output.Reset)
 				fmt.Printf("  %sStatus:%s   %s\n", output.Dim, output.Reset, output.ColorStatus(task.Status))
+				fmt.Printf("  %sType:%s     %s\n", output.Dim, output.Reset, output.ColorType(orDefault(task.Type, "feature")))
 				fmt.Printf("  %sPhase:%s    %s\n", output.Dim, output.Reset, orDash(task.Phase))
 				fmt.Printf("  %sFeature:%s  %s%s%s\n", output.Dim, output.Reset, output.Magenta, orDash(task.Feature), output.Reset)
 				fmt.Printf("  %sPriority:%s %s\n", output.Dim, output.Reset, output.ColorPriority(orDefault(task.Priority, "medium")))

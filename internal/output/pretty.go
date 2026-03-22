@@ -43,6 +43,26 @@ var StatusColors = map[string]string{
 	"blocked":     Red,
 }
 
+// Type icons
+var TypeIcons = map[string]string{
+	"feature":  "✚",
+	"bug":      "🐛",
+	"docs":     "📄",
+	"refactor": "♻",
+	"test":     "🧪",
+	"chore":    "⚙",
+}
+
+// Type colors
+var TypeColors = map[string]string{
+	"feature":  Green,
+	"bug":      Red,
+	"docs":     Blue,
+	"refactor": Yellow,
+	"test":     Magenta,
+	"chore":    Gray,
+}
+
 // Priority colors
 var PriorityColors = map[string]string{
 	"critical": Red,
@@ -77,6 +97,16 @@ func ColorStatus(s string) string {
 		icon = "?"
 	}
 	return fmt.Sprintf("%s%s %s%s", color, icon, s, Reset)
+}
+
+// ColorType returns a colored type string with icon
+func ColorType(t string) string {
+	color := TypeColors[t]
+	icon := TypeIcons[t]
+	if icon == "" {
+		icon = "?"
+	}
+	return fmt.Sprintf("%s%s %s%s", color, icon, t, Reset)
 }
 
 // ColorPriority returns a colored priority string

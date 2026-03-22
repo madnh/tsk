@@ -182,6 +182,18 @@ var ralphCmd = &cobra.Command{
 				notify("Ralph ⚠️", result.Action)
 			}
 
+			// Auto push if configured
+			if config.GetAutoPush() {
+				pushOut, pushErr := exec.Command("git", "push").CombinedOutput()
+				if pushErr != nil {
+					fmt.Printf("⚠ Auto-push failed: %s\n", strings.TrimSpace(string(pushOut)))
+					loopStore.Log(fmt.Sprintf("PUSH_FAILED: %s", strings.TrimSpace(string(pushOut))))
+				} else {
+					fmt.Println("  ↑ Auto-pushed to remote")
+					loopStore.Log("PUSH_OK")
+				}
+			}
+
 			switch result.Status {
 			case "complete":
 				notify("Ralph 🏁", "All phases complete!")

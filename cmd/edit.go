@@ -43,6 +43,12 @@ var editCmd = &cobra.Command{
 			}
 			task.Priority = v
 		}
+		if v, _ := cmd.Flags().GetString("type"); v != "" {
+			if !model.IsValidType(v) {
+				output.Fail(fmt.Sprintf("Invalid type: %s. Valid: %s", v, strings.Join(model.ValidTypes, ", ")))
+			}
+			task.Type = v
+		}
 		if v, _ := cmd.Flags().GetString("depends"); v != "" {
 			newDeps := splitAndTrim(v)
 			allTasks, _ := taskStore.All()
@@ -85,6 +91,7 @@ func init() {
 	editCmd.Flags().String("phase", "", "New phase")
 	editCmd.Flags().String("feature", "", "New feature")
 	editCmd.Flags().String("priority", "", "New priority")
+	editCmd.Flags().String("type", "", "New type (feature|bug|docs|refactor|test|chore)")
 	editCmd.Flags().String("depends", "", "New dependencies (comma-separated)")
 	editCmd.Flags().String("spec", "", "New spec path")
 	editCmd.Flags().String("status", "", "")

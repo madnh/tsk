@@ -56,19 +56,20 @@ var boardCmd = &cobra.Command{
 		type taskBrief struct {
 			ID      string   `json:"id"`
 			Title   string   `json:"title"`
+			Type    string   `json:"type,omitempty"`
 			Feature string   `json:"feature,omitempty"`
 			Depends []string `json:"depends,omitempty"`
 		}
 
 		var activeList, reviewList, blockedList []taskBrief
 		for _, t := range active {
-			activeList = append(activeList, taskBrief{ID: t.ID, Title: t.Title, Feature: t.Feature})
+			activeList = append(activeList, taskBrief{ID: t.ID, Title: t.Title, Type: t.Type, Feature: t.Feature})
 		}
 		for _, t := range review {
-			reviewList = append(reviewList, taskBrief{ID: t.ID, Title: t.Title, Feature: t.Feature})
+			reviewList = append(reviewList, taskBrief{ID: t.ID, Title: t.Title, Type: t.Type, Feature: t.Feature})
 		}
 		for _, t := range blocked {
-			blockedList = append(blockedList, taskBrief{ID: t.ID, Title: t.Title, Depends: t.Depends})
+			blockedList = append(blockedList, taskBrief{ID: t.ID, Title: t.Title, Type: t.Type, Depends: t.Depends})
 		}
 
 		output.Print(output.Result{
@@ -133,18 +134,20 @@ var boardCmd = &cobra.Command{
 				if len(active) > 0 {
 					fmt.Printf("  %s%sActive:%s\n", output.Bold, output.Yellow, output.Reset)
 					for _, t := range active {
-						fmt.Printf("    %s%s%s %s  %s%s%s  %s\n",
+						typeIcon := output.TypeIcons[t.Type]
+						fmt.Printf("    %s%s%s %s  %s%s%s  %s %s\n",
 							output.StatusColors["in_progress"], output.StatusIcons["in_progress"], output.Reset,
-							output.ColorID(t.ID), output.Dim, t.Feature, output.Reset, t.Title)
+							output.ColorID(t.ID), output.Dim, t.Feature, output.Reset, typeIcon, t.Title)
 					}
 					fmt.Println()
 				}
 				if len(review) > 0 {
 					fmt.Printf("  %s%sReview:%s\n", output.Bold, output.Blue, output.Reset)
 					for _, t := range review {
-						fmt.Printf("    %s%s%s %s  %s%s%s  %s\n",
+						typeIcon := output.TypeIcons[t.Type]
+						fmt.Printf("    %s%s%s %s  %s%s%s  %s %s\n",
 							output.StatusColors["review"], output.StatusIcons["review"], output.Reset,
-							output.ColorID(t.ID), output.Dim, t.Feature, output.Reset, t.Title)
+							output.ColorID(t.ID), output.Dim, t.Feature, output.Reset, typeIcon, t.Title)
 					}
 					fmt.Println()
 				}

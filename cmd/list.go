@@ -17,6 +17,7 @@ var listCmd = &cobra.Command{
 		phase, _ := cmd.Flags().GetString("phase")
 		status, _ := cmd.Flags().GetString("status")
 		feature, _ := cmd.Flags().GetString("feature")
+		taskType, _ := cmd.Flags().GetString("type")
 		available, _ := cmd.Flags().GetBool("available")
 
 		allTasks, err := taskStore.All()
@@ -34,6 +35,9 @@ var listCmd = &cobra.Command{
 		if feature != "" {
 			tasks = filterTasks(tasks, func(t *model.Task) bool { return t.Feature == feature })
 		}
+		if taskType != "" {
+			tasks = filterTasks(tasks, func(t *model.Task) bool { return t.Type == taskType })
+		}
 		if available {
 			tasks = filterTasks(tasks, func(t *model.Task) bool {
 				return t.Status == "pending" && !engine.IsBlocked(t, allTasks)
@@ -47,6 +51,7 @@ var listCmd = &cobra.Command{
 			Phase    string   `json:"phase"`
 			Feature  string   `json:"feature"`
 			Priority string   `json:"priority"`
+			Type     string   `json:"type"`
 			Depends  []string `json:"depends"`
 			Spec     string   `json:"spec"`
 			Blocked  bool     `json:"blocked"`
@@ -61,6 +66,7 @@ var listCmd = &cobra.Command{
 				Phase:    t.Phase,
 				Feature:  t.Feature,
 				Priority: t.Priority,
+				Type:     t.Type,
 				Depends:  t.Depends,
 				Spec:     t.Spec,
 				Blocked:  t.Status == "pending" && engine.IsBlocked(t, allTasks),
@@ -78,9 +84,9 @@ var listCmd = &cobra.Command{
 					return
 				}
 				fmt.Printf("\n  %s%d task(s)%s\n\n", output.Bold, len(tasks), output.Reset)
-				fmt.Printf("  %s%-12s %-14s %-6s %-20s %-10s %-20s Title%s\n",
-					output.Dim, "ID", "Status", "Phase", "Feature", "Priority", "Depends", output.Reset)
-				fmt.Printf("  %s%s%s\n", output.Dim, strings.Repeat("─", 110), output.Reset)
+				fmt.Printf("  %s%-12s %-14s %-6s %-20s %-10s %-12s %-20s Title%s\n",
+					output.Dim, "ID", "Status", "Phase", "Feature", "Priority", "Type", "Depends", output.Reset)
+				fmt.Printf("  %s%s%s\n", output.Dim, strings.Repeat("─", 122), output.Reset)
 
 				for _, t := range tasks {
 					bl := t.Status == "pending" && engine.IsBlocked(t, allTasks)
@@ -103,13 +109,18 @@ var listCmd = &cobra.Command{
 					if pri == "" {
 						pri = "medium"
 					}
-					fmt.Printf("  %s%s%s %-10s %s%-14s%s %-6s %s%-20s%s %-20s %s%-20s%s %s\n",
+					typ := t.Type
+					if typ == "" {
+						typ = "feature"
+					}
+					fmt.Printf("  %s%s%s %-10s %s%-14s%s %-6s %s%-20s%s %-20s %-20s %s%-20s%s %s\n",
 						color, icon, output.Reset,
 						output.ColorID(t.ID),
 						color, statusKey, output.Reset,
 						ph,
 						output.Magenta, feat, output.Reset,
 						output.ColorPriority(pri),
+						output.ColorType(typ),
 						output.Dim, deps, output.Reset,
 						t.Title)
 				}
@@ -140,6 +151,7 @@ func init() {
 	listCmd.Flags().String("phase", "", "Filter by phase")
 	listCmd.Flags().String("status", "", "Filter by status")
 	listCmd.Flags().String("feature", "", "Filter by feature")
+	listCmd.Flags().String("type", "", "Filter by type")
 	listCmd.Flags().Bool("available", false, "Show only available (pending, not blocked) tasks")
 	rootCmd.AddCommand(listCmd)
 }

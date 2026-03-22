@@ -41,6 +41,7 @@ func (s *TaskStore) Read(id string) (*model.Task, error) {
 		Phase:     GetString(meta, "phase"),
 		Feature:   GetString(meta, "feature"),
 		Priority:  GetString(meta, "priority"),
+		Type:      GetString(meta, "type"),
 		Depends:   GetStringSlice(meta, "depends"),
 		Spec:      GetString(meta, "spec"),
 		Files:     GetStringSlice(meta, "files"),
