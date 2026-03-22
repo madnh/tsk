@@ -40,6 +40,21 @@ ralph:
 
 task:
   default_priority: "medium"
+  default_type: "feature"
+
+# phases:
+#   - num: "1"
+#     name: "Setup"
+#     description: "Project setup"
+#   - num: "2"
+#     name: "Implementation"
+#     description: "Core implementation"
 
 doctor:
   required_tools: ["git", "claude"]
+
+update:
+  # Automatically check for a newer version at startup (non-blocking background check)
+  check_on_startup: false
+  # Seconds to wait for the version check before giving up
+  timeout_seconds: 5

@@ -1,13 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/madnh/tsk/internal/config"
 	"github.com/madnh/tsk/internal/output"
 	"github.com/madnh/tsk/internal/store"
+	"github.com/madnh/tsk/internal/updater"
 )
 
 var (
@@ -17,6 +20,9 @@ var (
 	taskStore    *store.TaskStore
 	phaseStore   *store.PhaseStore
 	loopStore    *store.LoopStore
+	appVersion   string
+	appCommit    string
+	appDate      string
 )
 
 var rootCmd = &cobra.Command{
@@ -29,8 +35,8 @@ var rootCmd = &cobra.Command{
 			output.CurrentFormat = output.FormatJSON
 		}
 
-		// Skip config loading for top-level init and help
-		if cmd.Name() == "help" || cmd.Name() == "completion" {
+		// Skip config loading for top-level init, help, version, and update
+		if cmd.Name() == "help" || cmd.Name() == "completion" || cmd.Name() == "version" || cmd.Name() == "update" {
 			return
 		}
 		// Only skip for tsk init (not loop init)
@@ -46,7 +52,28 @@ var rootCmd = &cobra.Command{
 		// Ensure directories exist
 		os.MkdirAll(cfg.ItemsDir, 0755)
 		os.MkdirAll(cfg.PhasesDir, 0755)
+
+		// Check for updates in background if enabled (non-blocking)
+		if config.GetUpdateCheckOnStartup() && output.CurrentFormat == output.FormatPretty {
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(),
+					time.Duration(config.GetUpdateTimeout())*time.Second)
+				defer cancel()
+				latest, err := updater.FetchLatestVersion(ctx)
+				if err != nil || !updater.IsNewer(latest, appVersion) {
+					return
+				}
+				fmt.Fprintf(os.Stderr, "\nUpdate available: %s → %s\nRun 'tsk update' to upgrade.\n\n", appVersion, latest)
+			}()
+		}
 	},
+}
+
+// SetVersion sets the version info from build-time injected values
+func SetVersion(v, c, d string) {
+	appVersion = v
+	appCommit = c
+	appDate = d
 }
 
 func init() {

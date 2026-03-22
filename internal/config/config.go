@@ -142,6 +142,11 @@ func GetClaudeArgs() []string {
 	return args
 }
 
+// GetAutoPush returns whether to auto-push after each loop step
+func GetAutoPush() bool {
+	return viper.GetBool("ralph.auto_push")
+}
+
 // GetDefaultPriority returns default task priority from config
 func GetDefaultPriority() string {
 	p := viper.GetString("task.default_priority")
@@ -149,4 +154,41 @@ func GetDefaultPriority() string {
 		return "medium"
 	}
 	return p
+}
+
+// GetDefaultType returns default task type from config
+func GetDefaultType() string {
+	t := viper.GetString("task.default_type")
+	if t == "" {
+		return "feature"
+	}
+	return t
+}
+
+// PhaseConfig represents a phase definition from tsk.yml
+type PhaseConfig struct {
+	Num         string `mapstructure:"num"`
+	Name        string `mapstructure:"name"`
+	Description string `mapstructure:"description"`
+}
+
+// GetPhases returns phase definitions from config
+func GetPhases() []PhaseConfig {
+	var phases []PhaseConfig
+	viper.UnmarshalKey("phases", &phases)
+	return phases
+}
+
+// GetUpdateCheckOnStartup returns whether to check for updates at startup
+func GetUpdateCheckOnStartup() bool {
+	return viper.GetBool("update.check_on_startup")
+}
+
+// GetUpdateTimeout returns the timeout in seconds for startup update checks, default 5
+func GetUpdateTimeout() int {
+	v := viper.GetInt("update.timeout_seconds")
+	if v == 0 {
+		return 5
+	}
+	return v
 }
