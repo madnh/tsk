@@ -70,25 +70,36 @@ sudo mv tsk /usr/local/bin/
 
 ## Quick Start
 
+### Automated Execution (Recommended)
+
 ```bash
 # Initialize project
 tsk init
 
-# Create a phase
-# (manually create tasks/phases/phase-1.md with frontmatter)
+# Create tasks and phase
+tsk create --title "Feature 1" --phase 1 --priority high
+tsk create --title "Feature 2" --phase 1 --priority high
 
-# Create tasks
-tsk create --title "Implement user auth" --phase 1 --feature auth --priority high
-tsk create --title "Add JWT middleware" --phase 1 --feature auth --depends TASK-001
+# Run tasks in parallel (fast!)
+tsk ralph --phase 1
 
-# Work on tasks
+# Monitor progress in another terminal
+tsk worker status
+```
+
+**→ [Confused about loop vs ralph vs worker?](docs/QUICK_CHOICE.md)** See the quick choice guide.
+
+### Manual Task Management
+
+```bash
+# Work on tasks individually
 tsk next                    # find next available task
 tsk start TASK-001          # claim it
 tsk log TASK-001 --stdin << 'EOF'
-- Implemented auth module
+- Implemented feature
 - Added tests
 EOF
-tsk files TASK-001 --add "internal/auth.go,internal/auth_test.go"
+tsk files TASK-001 --add "feature.go,feature_test.go"
 tsk done TASK-001           # submit for review
 
 # Review
@@ -187,7 +198,9 @@ tsk worker logs --task TASK-001        # View specific worker logs
 - **Git Worktree Isolation**: Each task executes on its own branch with automatic cleanup
 - **Fault Tolerance**: Failed workers don't block others; independent recovery
 
-**See [docs/PARALLEL_RALPH.md](docs/PARALLEL_RALPH.md) for detailed documentation, configuration, and examples.**
+**Documentation:**
+- **[PARALLEL_RALPH.md](docs/PARALLEL_RALPH.md)** — Detailed feature docs, config, examples
+- **[QUICK_CHOICE.md](docs/QUICK_CHOICE.md)** — When to use loop vs ralph vs worker
 
 #### State Machine
 
