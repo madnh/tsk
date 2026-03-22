@@ -42,7 +42,7 @@ var ralphRunCmd = &cobra.Command{
 
 		// Handle signals
 		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 		go func() {
 			<-sigCh
 			fmt.Fprintln(os.Stderr, "\nShutting down supervisor...")
@@ -110,6 +110,8 @@ func initSupervisor(phaseNum string, supervisorStore *store.SupervisorStore) {
 }
 
 func runSupervisor(ctx context.Context, supervisorStore *store.SupervisorStore) {
+	reconcileOrphanWorkers(supervisorStore)
+
 	maxWorkers := config.GetMaxWorkers()
 	pollInterval := time.Duration(config.GetSupervisorPoll()) * time.Second
 	activeWorkers := make(map[string]*exec.Cmd)
@@ -147,12 +149,6 @@ func runSupervisor(ctx context.Context, supervisorStore *store.SupervisorStore) 
 				if wState != nil {
 					if wState.Status == "done" {
 						fmt.Printf("  ✓ %s complete\n", taskID)
-						// Update task status in main task file
-						task, err := taskStore.Read(taskID)
-						if err == nil && task != nil {
-							task.Status = "done"
-							taskStore.Write(task)
-						}
 					} else {
 						fmt.Printf("  ⚠ %s exited with status: %s\n", taskID, wState.Status)
 					}
@@ -217,12 +213,51 @@ func runSupervisor(ctx context.Context, supervisorStore *store.SupervisorStore) 
 			break
 		}
 	}
+
+	// Graceful shutdown: SIGTERM all workers, wait, then SIGKILL
+	if len(activeWorkers) > 0 {
+		fmt.Printf("Cleaning up %d worker(s)...\n", len(activeWorkers))
+		for _, proc := range activeWorkers {
+			if proc.Process != nil {
+				proc.Process.Signal(syscall.SIGTERM)
+			}
+		}
+		deadline := time.After(10 * time.Second)
+		for len(activeWorkers) > 0 {
+			select {
+			case <-deadline:
+				for taskID, proc := range activeWorkers {
+					if proc.Process != nil {
+						proc.Process.Kill()
+					}
+					fmt.Printf("  ✗ Force-killed worker for %s\n", taskID)
+					delete(activeWorkers, taskID)
+				}
+				return
+			case <-time.After(500 * time.Millisecond):
+				for id, proc := range activeWorkers {
+					if proc.ProcessState != nil && proc.ProcessState.Exited() {
+						fmt.Printf("  ✓ Worker %s exited cleanly\n", id)
+						delete(activeWorkers, id)
+					}
+				}
+			}
+		}
+		fmt.Println("All workers stopped.")
+	}
 }
 
 func spawnWorker(ctx context.Context, taskID string) *exec.Cmd {
 	proc := exec.CommandContext(ctx, os.Args[0], "ralph", "worker", "run", "--task", taskID, "--root-dir", cfg.Root)
 	proc.Stdout = nil
 	proc.Stderr = nil
+	proc.SysProcAttr = &syscall.SysProcAttr{
+		Pdeathsig: syscall.SIGTERM,
+	}
+	proc.Cancel = func() error {
+		return proc.Process.Signal(syscall.SIGTERM)
+	}
+	proc.WaitDelay = 10 * time.Second
 
 	if err := proc.Start(); err != nil {
 		fmt.Printf("Error spawning worker for %s: %v\n", taskID, err)
@@ -233,6 +268,41 @@ func spawnWorker(ctx context.Context, taskID string) *exec.Cmd {
 	go proc.Wait()
 
 	return proc
+}
+
+// reconcileOrphanWorkers kills any workers left running from a previous supervisor session.
+func reconcileOrphanWorkers(supervisorStore *store.SupervisorStore) {
+	state, err := supervisorStore.ReadState()
+	if err != nil {
+		return
+	}
+	orphansFound := false
+	for _, w := range state.Workers {
+		if w.Status != "running" || w.PID <= 0 {
+			continue
+		}
+		proc, err := os.FindProcess(w.PID)
+		if err != nil {
+			continue
+		}
+		// Signal 0 checks if process exists without killing it
+		if err := proc.Signal(syscall.Signal(0)); err != nil {
+			// Process no longer exists — mark as failed
+			supervisorStore.UpdateWorker(w.TaskID, "failed")
+			supervisorStore.Log(fmt.Sprintf("RECONCILE worker %s (PID %d) no longer running, marked failed", w.TaskID, w.PID))
+			continue
+		}
+		// Process still alive — it's an orphan
+		orphansFound = true
+		fmt.Printf("  ⚠ Killing orphan worker PID %d (task %s)\n", w.PID, w.TaskID)
+		proc.Signal(syscall.SIGTERM)
+		supervisorStore.UpdateWorker(w.TaskID, "failed")
+		supervisorStore.Log(fmt.Sprintf("RECONCILE killed orphan worker %s (PID %d)", w.TaskID, w.PID))
+	}
+	if orphansFound {
+		// Give orphans a moment to clean up
+		time.Sleep(2 * time.Second)
+	}
 }
 
 var ralphStatusCmd = &cobra.Command{
@@ -269,6 +339,57 @@ var ralphStatusCmd = &cobra.Command{
 	},
 }
 
+var ralphCleanupCmd = &cobra.Command{
+	Use:   "cleanup",
+	Short: "Kill orphan workers and clean up stale state",
+	Run: func(cmd *cobra.Command, args []string) {
+		supervisorStore := store.NewSupervisorStore(cfg.LoopDir)
+		if !supervisorStore.StateExists() {
+			fmt.Println("No supervisor state found.")
+			return
+		}
+
+		state, err := supervisorStore.ReadState()
+		if err != nil {
+			fmt.Printf("Error reading supervisor state: %v\n", err)
+			return
+		}
+
+		found := 0
+		for _, w := range state.Workers {
+			if w.PID <= 0 {
+				continue
+			}
+			proc, err := os.FindProcess(w.PID)
+			if err != nil {
+				continue
+			}
+			alive := proc.Signal(syscall.Signal(0)) == nil
+			if w.Status == "running" {
+				found++
+				if alive {
+					fmt.Printf("  ⚠ Killing orphan worker PID %d (task %s)\n", w.PID, w.TaskID)
+					proc.Signal(syscall.SIGTERM)
+				} else {
+					fmt.Printf("  ✗ Stale worker entry PID %d (task %s) — process already dead\n", w.PID, w.TaskID)
+				}
+				supervisorStore.UpdateWorker(w.TaskID, "failed")
+			} else if alive {
+				found++
+				fmt.Printf("  ⚠ Killing lingering worker PID %d (task %s, status %s)\n", w.PID, w.TaskID, w.Status)
+				proc.Signal(syscall.SIGTERM)
+			}
+		}
+
+		if found == 0 {
+			fmt.Println("No orphan or stale workers found.")
+		} else {
+			fmt.Printf("Cleaned up %d worker(s).\n", found)
+			supervisorStore.Log(fmt.Sprintf("CLEANUP killed/cleaned %d workers", found))
+		}
+	},
+}
+
 func init() {
 	// Flags for ralph run subcommand
 	ralphRunCmd.Flags().String("phase", "", "Phase to run")
@@ -277,6 +398,7 @@ func init() {
 	// Add subcommands to ralph
 	ralphCmd.AddCommand(ralphRunCmd)
 	ralphCmd.AddCommand(ralphStatusCmd)
+	ralphCmd.AddCommand(ralphCleanupCmd)
 	ralphCmd.AddCommand(workerCmd)
 
 	rootCmd.AddCommand(ralphCmd)

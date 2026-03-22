@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -40,7 +41,7 @@ var workerRunCmd = &cobra.Command{
 
 		// Handle signals
 		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 		go func() {
 			<-sigCh
 			fmt.Fprintln(os.Stderr, "\nShutting down worker...")
@@ -82,7 +83,7 @@ var workerResumeCmd = &cobra.Command{
 		defer cancel()
 
 		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 		go func() {
 			<-sigCh
 			fmt.Fprintln(os.Stderr, "\nShutting down worker...")
@@ -244,11 +245,13 @@ func runWorker(ctx context.Context, taskID string, cfg *config.Config) {
 		output.Fail(fmt.Sprintf("Failed to create worktree: %v", err))
 	}
 
-	// Mark task in_progress if pending
+	// Mark task in_progress if pending (write to worktree so it's part of the branch)
 	if task.Status == "pending" {
 		task.Status = "in_progress"
 		task.Started = time.Now().Format("2006-01-02")
-		taskStore.Write(task)
+		worktreeItemsDir := filepath.Join(state.WorktreePath, "tasks", "items")
+		worktreeTaskStore := store.NewTaskStore(worktreeItemsDir)
+		worktreeTaskStore.Write(task)
 	}
 
 	cooldown := time.Duration(config.GetCooldown()) * time.Second
@@ -404,22 +407,39 @@ func runWorker(ctx context.Context, taskID string, cfg *config.Config) {
 func handleWorkerCompletion(cfg *config.Config, state *model.WorkerState, taskID string, workerStore *store.WorkerStore) error {
 	workerStore.Log("MERGING to main...")
 
-	// Rebase onto main
-	if err := git.RebaseOntoMain(state.WorktreePath, "main"); err != nil {
-		if git.HasConflicts(state.WorktreePath) {
-			state.Status = "blocked"
-			state.BlockedReason = "Merge conflict — resolve manually and resume"
-			return err
+	const maxRetries = 3
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Rebase onto main
+		if err := git.RebaseOntoMain(state.WorktreePath, "main"); err != nil {
+			if git.HasConflicts(state.WorktreePath) {
+				state.Status = "blocked"
+				state.BlockedReason = "Merge conflict — resolve manually and resume"
+				return err
+			}
+			return fmt.Errorf("rebase failed: %w", err)
 		}
-		return err
+
+		// Merge to main (fast-forward only)
+		if err := git.MergeToMain(cfg.Root, state.BranchName); err != nil {
+			if attempt < maxRetries {
+				workerStore.Log(fmt.Sprintf("MERGE_RETRY attempt %d/%d — main moved, re-rebasing", attempt, maxRetries))
+				time.Sleep(time.Duration(attempt) * time.Second)
+				continue
+			}
+			return fmt.Errorf("merge failed after %d attempts: %w", maxRetries, err)
+		}
+
+		workerStore.Log("MERGED to main")
+		break
 	}
 
-	// Merge to main
-	if err := git.MergeToMain(cfg.Root, state.BranchName); err != nil {
-		return err
+	// Update task status to done in main repo (now safe — branch is merged)
+	taskStore := store.NewTaskStore(cfg.ItemsDir)
+	task, err := taskStore.Read(taskID)
+	if err == nil && task != nil {
+		task.Status = "done"
+		taskStore.Write(task)
 	}
-
-	workerStore.Log("MERGED to main")
 
 	// Remove worktree
 	if err := git.Remove(cfg.Root, state.WorktreePath); err != nil {
@@ -437,6 +457,13 @@ func executeClaudeCmdInDir(ctx context.Context, promptText, dir string) (string,
 	cmd := exec.CommandContext(ctx, claudeCmd, claudeArgs...)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(promptText)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Pdeathsig: syscall.SIGTERM,
+	}
+	cmd.Cancel = func() error {
+		return cmd.Process.Signal(syscall.SIGTERM)
+	}
+	cmd.WaitDelay = 10 * time.Second
 	out, err := cmd.CombinedOutput()
 	exitCode := 0
 	if err != nil {

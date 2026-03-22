@@ -66,8 +66,10 @@ func RebaseOntoMain(worktreePath, mainBranch string) error {
 	if err := cmd.Run(); err != nil {
 		// Check for conflicts
 		if HasConflicts(worktreePath) {
-			// Abort the rebase
-			exec.Command("git", "rebase", "--abort").Dir = worktreePath
+			// Abort the rebase to leave worktree in a clean state
+			abortCmd := exec.Command("git", "rebase", "--abort")
+			abortCmd.Dir = worktreePath
+			abortCmd.Run()
 			return err
 		}
 		return err
