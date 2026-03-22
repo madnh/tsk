@@ -20,10 +20,13 @@ jobs:
         with:
           go-version: "1.22"
 
-      - name: Run GoReleaser
+      - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
-          args: release --clean
+          install-only: true
+
+      - name: Run Release
+        run: make release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
