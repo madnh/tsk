@@ -37,6 +37,30 @@ sudo mv tsk /usr/local/bin/
 
 Or manually: go to [Releases](https://github.com/madnh/tsk/releases), download the archive for your OS/arch, extract, and put `tsk` in your PATH.
 
+### Keep updated
+
+`tsk` includes built-in auto-update support. Check for and install updates:
+
+```bash
+# Check for updates without installing
+tsk update --check
+
+# Update to the latest version (with confirmation)
+tsk update
+
+# Update without confirmation prompt
+tsk update --yes
+
+# Install a specific version
+tsk update --version v0.3.0
+```
+
+The update feature:
+- Downloads the binary for your OS/architecture
+- Verifies checksums against the official release
+- Atomically replaces your current binary
+- Shows progress during download
+
 ### Build from source
 
 ```bash
@@ -172,6 +196,8 @@ tsk loop reset        # clear state
 |---------|-------------|
 | `tsk init` | Create `tsk.yml` and directory structure |
 | `tsk doctor` | Check environment (tsk.yml, git, claude, paths) |
+| `tsk update` | Update to latest version (`--check` to check only, `--yes` to skip confirmation) |
+| `tsk version` | Show version, commit, and build date |
 
 ## Output Format
 
