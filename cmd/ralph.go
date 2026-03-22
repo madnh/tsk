@@ -167,6 +167,18 @@ func runSupervisor(ctx context.Context, supervisorStore *store.SupervisorStore) 
 			if task.Status != "pending" && task.Status != "in_progress" {
 				continue
 			}
+			// Check if worker already completed (state may be ahead of task file)
+			workerStore := store.NewWorkerStore(cfg.TasksDir, task.ID)
+			if workerStore.StateExists() {
+				wState, _ := workerStore.ReadState()
+				if wState != nil && wState.Status == "done" {
+					task.Status = "done"
+					taskStore.Write(task)
+					supervisorStore.Log(fmt.Sprintf("SYNC task %s status to done (worker already completed)", task.ID))
+					fmt.Printf("  ✓ %s already done (synced)\n", task.ID)
+					continue
+				}
+			}
 			if engine.IsBlocked(task, allTasks) {
 				continue
 			}

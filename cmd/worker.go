@@ -234,6 +234,12 @@ func runWorker(ctx context.Context, taskID string, cfg *config.Config) {
 		state.BranchName = fmt.Sprintf("task/%s", taskID)
 	}
 
+	// If worker already completed, nothing to do
+	if state.Status == "done" {
+		workerStore.Log(fmt.Sprintf("SKIP task=%s already done", taskID))
+		return
+	}
+
 	// Write PID
 	state.PID = os.Getpid()
 	workerStore.WriteState(state)
