@@ -349,10 +349,11 @@ func runWorker(ctx context.Context, taskID string, cfg *config.Config) {
 
 		retryCount = 0
 
-		// Advance state machine
+		// Advance state machine (use worktree task store so changes are committed with the branch)
+		worktreeTaskStore := store.NewTaskStore(filepath.Join(state.WorktreePath, "tasks", "items"))
 		eng := &engine.WorkerEngine{
 			WorkerStore: workerStore,
-			TaskStore:   taskStore,
+			TaskStore:   worktreeTaskStore,
 		}
 		result, err := eng.Advance(state)
 		if err != nil {

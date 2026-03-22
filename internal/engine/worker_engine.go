@@ -193,7 +193,10 @@ func (e *WorkerEngine) Advance(state *model.WorkerState) (*WorkerAdvanceResult, 
 		state.StepStartedAt = ""
 	}
 
-	state.Status = nextStatus
+	// Only override status if it wasn't already set to a terminal state (e.g. "done")
+	if state.Status == "running" {
+		state.Status = nextStatus
+	}
 	e.WorkerStore.WriteState(state)
 
 	logEntry := fmt.Sprintf("END result=%q → %s", result, action)
